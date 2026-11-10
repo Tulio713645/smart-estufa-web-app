@@ -1,106 +1,98 @@
-# 🌱 Estufa Inteligente IoT - Nuvem MQTT (SPA Mobile-First)
+# 🌱 Estufa Inteligente IoT - Conexão por Código da Estufa & Adaptador Wi-Fi
 
-Aplicação Web moderna, *mobile-first*, com visual *dark mode* elegante para monitoramento e controle remoto da estufa inteligente de qualquer lugar do mundo via **MQTT na Nuvem (HiveMQ)**.
+Aplicação Web moderna, *mobile-first*, com visual *dark mode* elegante e sistema de pareamento simplificado por **Código da Estufa** (`DEVICE_ID`) na Nuvem MQTT (HiveMQ).
 
 ---
 
-## ☁️ Arquitetura de Comunicação IoT (MQTT)
+## 🏗️ Arquitetura do Sistema (Arduino Uno + Adaptador Wi-Fi ESP-01)
 
-A comunicação foi migrada de HTTP local para **MQTT em Nuvem**:
+A estufa utiliza o **Arduino Uno** como microcontrolador principal de sensores/relés e o módulo **ESP-01** como adaptador de rede Wi-Fi e cliente MQTT:
 
 ```text
-[ESP32 / Microcontrolador] 
-     │ (MQTT nativo TCP porta 1883)
-     ▼
-[Broker Público HiveMQ Cloud]
-     ▲
-     │ (WebSocket Seguro WSS porta 8884)
-[App Web no Celular / Navegador (GitHub Pages)]
+[Sensores & Relés]
+        │
+        ▼
+ [Arduino Uno]  (RAM 2KB otimizada via macros F())
+        │
+        │ Serial 9600 baud (Pinos 2 e 3 SoftwareSerial)
+        ▼
+ [Adaptador Wi-Fi ESP-01]  (#define DEVICE_ID "ESTUFA-A1B2")
+        │
+        │ MQTT TCP porta 1883
+        ▼
+ [Broker HiveMQ Cloud (broker.hivemq.com)]
+        ▲
+        │ WebSocket Seguro WSS porta 8884
+        │
+ [App Web SPA no Celular / Navegador (GitHub Pages)]
+  (Conectado apenas digitando o código: ESTUFA-A1B2)
 ```
 
-* **Acesso Global**: Não requer estar na mesma rede Wi-Fi! Funciona via 4G/5G, Wi-Fi de outra casa ou trabalho.
-* **Tempo Real Instantâneo**: Ao clicar para ligar a bomba ou ventoinha no app, o comando é publicado e o relé é acionado em milissegundos.
-* **Mensagens Retidas (Retain)**: O ESP32 publica as leituras com a flag *retain*, permitindo que o aplicativo receba o status imediatamente ao abrir, sem aguardar o próximo ciclo.
+---
+
+## 🔑 Pareamento Simples por "Código da Estufa"
+
+O usuário não precisa digitar URLs complexas de Broker ou nomes manuais de tópicos:
+
+1. No firmware da estufa, define-se o identificador:
+   ```cpp
+   #define DEVICE_ID "ESTUFA-A1B2"
+   ```
+2. No **App Web**, basta abrir o modal de configurações e inserir o código:
+   ```text
+   ESTUFA-A1B2
+   ```
+3. O aplicativo gera e se inscreve automaticamente nos tópicos:
+   * **Leitura de Sensores:** `estufa/ESTUFA-A1B2/sensores`
+   * **Controle de Atuadores:** `estufa/ESTUFA-A1B2/comandos`
+4. O código é salvo no `localStorage` do navegador para reconexão automática e transparente.
 
 ---
 
-## 📡 Tópicos MQTT Padronizados
+## 🔌 Esquema de Ligação do Hardware
 
-* **Telemetria dos Sensores (ESP32 ➔ Web App)**:
-  `estufa/Tulio/sensores`
-  *Payload JSON recebido:*
-  ```json
-  {
-    "temp": 25.5,
-    "umidade_ar": 60,
-    "umidade_solo": 45,
-    "nivel_agua": "OK",
-    "bomba": 0,
-    "ventoinha": 0
-  }
-  ```
+### 1. Arduino Uno ➔ Adaptador ESP-01
+| Pino Arduino Uno | Pino ESP-01 | Observação |
+| :--- | :--- | :--- |
+| **Pino 2 (Software RX)** | **TX (GPIO 1)** | Recepção direta de dados |
+| **Pino 3 (Software TX)** | **RX (GPIO 3)** | Envio (utilizar divisor 5V ➔ 3.3V com resistores 1k/2k) |
+| **GND** | **GND** | Terra comum |
+| **Fonte Externa 3.3V** | **VCC / CH_PD (EN)** | O ESP-01 requer ~300mA em picos de transmissão Wi-Fi |
 
-* **Comandos de Atuadores (Web App ➔ ESP32)**:
-  `estufa/Tulio/comandos`
-  *Exemplos de comando:*
-  ```json
-  { "comando": "bomba_toggle" }
-  { "comando": "ventoinha_toggle" }
-  { "comando": "status" }
-  ```
+### 2. Arduino Uno ➔ Sensores & Relés
+| Componente | Pino Arduino Uno | Descrição |
+| :--- | :--- | :--- |
+| **Sensor DHT11** | `Pino Digital 4` | Temperatura do Ar (°C) e Umidade do Ar (%) |
+| **Higrômetro de Solo** | `Pino Analógico A0` | Umidade do solo (0 a 100%) |
+| **Sensor Boia de Nível** | `Pino Digital 7` | Leitura digital (`INPUT_PULLUP`: LOW = OK, HIGH = Crítico) |
+| **Relé 1 (Bomba)** | `Pino Digital 5` | Acionamento da bomba de água (irrigação) |
+| **Relé 2 (Ventoinha)** | `Pino Digital 6` | Acionamento do cooler de circulação |
 
 ---
 
-## 📱 Recursos da Interface Web
-
-1. **Cabeçalho com Status MQTT**:
-   * 🟢 **Conectado (MQTT)** – conectado ao Broker na nuvem.
-   * 🟡 **Reconectando...** – tentando restabelecer conexão.
-   * 🔴 **Desconectado** – falha ou offline.
-   * 🟢 **Simulado** – Modo Demonstração ativo.
-
-2. **Cards Visuais dos Sensores**:
-   * 🌡️ **Temperatura do Ar (°C)**: DHT11 com indicação de faixas de conforto.
-   * 💧 **Umidade do Ar (%)**: DHT11 com avisos de ar seco/ideal.
-   * 🌿 **Umidade do Solo (%)**: Higrômetro analógico com **Barra de Progresso Dinâmica** (Seco < 30% em vermelho, Ideal 30-70% em esmeralda, Saturado > 70% em azul).
-   * 🚰 **Nível de Água do Reservatório**: Boia/sensor com alerta visual de nível crítico e gráfico de volume do reservatório.
-
-3. **Controle Remoto de Atuadores**:
-   * 🚿 **Bomba de Água**: Botão switch iOS com bloqueio de segurança se a água estiver crítica.
-   * 🌀 **Ventoinha (Cooler)**: Botão switch iOS com **animação de rotação contínua da hélice** quando ligada.
-
-4. **Modal de Configurações**:
-   * Ajuste do Broker WebSocket (padrão: `wss://broker.hivemq.com:8884/mqtt`).
-   * Ajuste do Tópico Base (padrão: `estufa/Tulio`).
-   * Botão **Reconectar ao Broker**.
-   * **Modo Demonstração (Simulado)**: Permite testar todos os cards, toggles e gráficos sem placa física conectada.
-
----
-
-## 📂 Arquivos do Repositório
+## 📂 Arquivos do Projeto
 
 ```text
 Interface Estufa/
-├── index.html           # SPA com suporte a MQTT.js via WebSocket Seguro (WSS)
-├── style.css            # Estilos dark mode, switches proporcionais e animações
-├── app.js               # Conexão MQTT.js, subscrição, publicação e modo simulação
-├── estufa_hardware.ino  # Código ESP32 com PubSubClient, Wi-Fi e controle dos relés
+├── index.html           # SPA mobile-first com entrada simplificada de Código da Estufa
+├── style.css            # Folha de estilos dark mode elegante e responsiva
+├── app.js               # Conexão MQTT via WebSocket, tópicos dinâmicos e persistência
+├── estufa_hardware.ino  # Firmware para Arduino Uno (sensores, relés e serial com ESP-01)
+├── adaptador_esp01.ino  # Firmware para o Adaptador ESP-01 (Wi-Fi, MQTT e ponte serial)
 └── README.md            # Documentação completa
 ```
 
 ---
 
-## 🔌 Pinagem no ESP32 (`estufa_hardware.ino`)
+## 📦 Como Subir o Código nas Placas
 
-| Componente | Pino ESP32 | Descrição |
-| :--- | :--- | :--- |
-| **Sensor DHT11** | `GPIO 4` | Leitura digital de temperatura e umidade |
-| **Higrômetro de Solo** | `GPIO 34` | Leitura analógica (ADC1) mapeada em % |
-| **Boia de Nível** | `GPIO 18` | Entrada com pull-up interno (`INPUT_PULLUP`) |
-| **Relé da Bomba** | `GPIO 26` | Acionamento da bomba de irrigação |
-| **Relé da Ventoinha** | `GPIO 27` | Acionamento do cooler / circulação |
-
-### Bibliotecas necessárias na Arduino IDE:
-1. `PubSubClient` (por Nick O'Leary)
-2. `DHT sensor library` (por Adafruit)
-3. `Adafruit Unified Sensor` (por Adafruit)
+1. **Gravar o ESP-01 (`adaptador_esp01.ino`)**:
+   * Use um adaptador USB-Serial para ESP-01 (ou o próprio Arduino Uno com reset aterrado).
+   * Altere `WIFI_SSID` e `WIFI_PASS` com a rede da sua casa.
+   * Certifique-se de que a placa selecionada na Arduino IDE é **Generic ESP8266 Module**.
+2. **Gravar o Arduino Uno (`estufa_hardware.ino`)**:
+   * Selecione a placa **Arduino Uno** e a porta COM correspondente.
+   * Faça o upload do código normalmente via cabo USB.
+3. **Acessar a Aplicação Web**:
+   * Acesse [tulio713645.github.io/smart-estufa-web-app](https://tulio713645.github.io/smart-estufa-web-app/).
+   * Digite `ESTUFA-A1B2` e clique em **Salvar Alterações**.

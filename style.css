@@ -1120,6 +1120,60 @@ input:checked + .slider:before {
   color: #f87171;
 }
 
+/* Card Informativo de Tópicos Automáticos */
+.topic-preview-card {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.topic-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.topic-preview-header svg {
+  color: var(--primary);
+}
+
+.topic-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.topic-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7813rem;
+}
+
+.topic-tag {
+  font-size: 0.6563rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-muted);
+}
+
+.topic-preview-item code {
+  color: #38bdf8;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
 /* Indicador de persistência no localStorage */
 .storage-indicator {
   display: flex;

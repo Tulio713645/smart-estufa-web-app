@@ -78,11 +78,10 @@
       </div>
       <div class="meta-item">
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 11a9 9 0 0 1 9 9"></path>
-          <path d="M4 4a16 16 0 0 1 16 16"></path>
-          <circle cx="5" cy="19" r="1"></circle>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
         </svg>
-        <span>Tópico: <strong id="currentTopicText">estufa/Tulio/sensores</strong></span>
+        <span>Estufa: <strong id="currentDeviceCodeText">ESTUFA-A1B2</strong></span>
       </div>
     </section>
 
@@ -306,59 +305,45 @@
       <div class="modal-header">
         <div class="modal-title-box">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 11a9 9 0 0 1 9 9"></path>
-            <path d="M4 4a16 16 0 0 1 16 16"></path>
-            <circle cx="5" cy="19" r="1"></circle>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
           </svg>
-          <h3 id="modalTitle">Configurações MQTT & Nuvem</h3>
+          <h3 id="modalTitle">Conectar Estufa Inteligente</h3>
         </div>
         <button class="modal-close-btn" id="closeSettingsBtn" aria-label="Fechar Modal">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="brokerInput">Broker MQTT (WebSocket Seguro WSS)</label>
+          <label for="deviceCodeInput">Código do Dispositivo / ID da Estufa</label>
           <div class="input-with-prefix">
+            <span class="input-prefix">ID:</span>
             <input 
               type="text" 
-              id="brokerInput" 
-              placeholder="wss://broker.hivemq.com:8884/mqtt" 
+              id="deviceCodeInput" 
+              placeholder="ESTUFA-A1B2" 
               autocomplete="off"
               spellcheck="false"
+              style="text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;"
             >
           </div>
-          <small class="form-help">Padrão público gratuito: <code>wss://broker.hivemq.com:8884/mqtt</code> (ou <code>wss://broker.emqx.io:8084/mqtt</code>).</small>
+          <small class="form-help">Digite o código configurado no Arduino/ESP da sua estufa (ex: <code>ESTUFA-A1B2</code>).</small>
         </div>
 
-        <div class="form-group">
-          <label for="topicInput">Tópico Base da Estufa</label>
-          <div class="input-with-prefix">
-            <input 
-              type="text" 
-              id="topicInput" 
-              placeholder="estufa/Tulio" 
-              autocomplete="off"
-              spellcheck="false"
-            >
+        <!-- Tópicos Automáticos (Informativo) -->
+        <div class="topic-preview-card">
+          <div class="topic-preview-header">
+            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
+              <path d="M4 11a9 9 0 0 1 9 9"></path>
+              <path d="M4 4a16 16 0 0 1 16 16"></path>
+              <circle cx="5" cy="19" r="1"></circle>
+            </svg>
+            <span>Tópicos MQTT configurados automaticamente:</span>
           </div>
-          <small class="form-help">
-            Sensores: <code id="previewTopicSensors">estufa/Tulio/sensores</code><br>
-            Comandos: <code id="previewTopicCommands">estufa/Tulio/comandos</code>
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label for="ipInput">Endereço IP Local do Módulo (Opcional)</label>
-          <div class="input-with-prefix">
-            <input 
-              type="text" 
-              id="ipInput" 
-              placeholder="ex: 192.168.1.150 ou 192.168.4.1" 
-              autocomplete="off"
-              spellcheck="false"
-            >
+          <div class="topic-preview-list">
+            <div class="topic-preview-item"><span class="topic-tag">Telemetria</span> <code id="previewTopicSensors">estufa/ESTUFA-A1B2/sensores</code></div>
+            <div class="topic-preview-item"><span class="topic-tag">Controle</span> <code id="previewTopicCommands">estufa/ESTUFA-A1B2/comandos</code></div>
           </div>
-          <small class="form-help">Salvo como referência para conexões locais ou diagnósticos.</small>
         </div>
 
         <!-- Indicador de Persistência no LocalStorage -->
@@ -368,7 +353,7 @@
             <polyline points="17 21 17 13 7 13 7 21"></polyline>
             <polyline points="7 3 7 8 15 8"></polyline>
           </svg>
-          <span>As configurações são salvas automaticamente no <strong>localStorage</strong> do seu navegador.</span>
+          <span>O código é salvo automaticamente no <strong>localStorage</strong> para reconexão instantânea.</span>
         </div>
 
         <!-- Modo Demonstração / Simulação -->
@@ -376,7 +361,7 @@
           <div class="sim-toggle-row">
             <div class="sim-toggle-text">
               <span class="sim-toggle-title">Modo Demonstração (Simulado)</span>
-              <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de conexão com o broker MQTT ou placa física.</p>
+              <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de conexão com o hardware físico.</p>
             </div>
             <div class="sim-switch-wrapper">
               <label class="switch" for="simulationToggle">
@@ -393,7 +378,7 @@
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
               <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
-            Reconectar ao Broker Agora
+            Reconectar Agora
           </button>
           <span class="test-result-text" id="testResultText"></span>
         </div>
@@ -405,7 +390,7 @@
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
-            Esquecer Dispositivo / Limpar Configurações
+            Esquecer Dispositivo / Limpar Dados
           </button>
         </div>
       </div>

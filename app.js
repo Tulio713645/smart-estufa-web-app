@@ -1,33 +1,30 @@
 /**
  * Estufa Inteligente - Single Page Application (SPA)
- * Comunicação IoT via MQTT na Nuvem (WebSocket Seguro WSS) + Modo Simulação
+ * Conexão Remota Simplificada por Código da Estufa + Nuvem MQTT (HiveMQ)
  */
 
 (function () {
   'use strict';
 
+  // Broker MQTT fixo na nuvem (WebSocket Seguro WSS para GitHub Pages)
+  const FIXED_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+
   // Chaves de armazenamento no localStorage
   const STORAGE_KEYS = {
-    BROKER: 'greenhouse_mqtt_broker',
-    TOPIC_BASE: 'greenhouse_mqtt_topic',
-    IP: 'greenhouse_ip',
+    DEVICE_CODE: 'greenhouse_device_code',
     SIMULATION: 'greenhouse_simulation_mode'
   };
 
   // Configurações padrão
   const DEFAULT_CONFIG = {
-    broker: 'wss://broker.hivemq.com:8884/mqtt',
-    topicBase: 'estufa/Tulio',
-    ip: '192.168.4.1',
+    deviceCode: 'ESTUFA-A1B2',
     simulation: false
   };
 
   // Estado da aplicação (carrega dados pré-salvos no localStorage ou usa o padrão)
   const state = {
     config: {
-      broker: localStorage.getItem(STORAGE_KEYS.BROKER) || DEFAULT_CONFIG.broker,
-      topicBase: localStorage.getItem(STORAGE_KEYS.TOPIC_BASE) || DEFAULT_CONFIG.topicBase,
-      ip: localStorage.getItem(STORAGE_KEYS.IP) || DEFAULT_CONFIG.ip,
+      deviceCode: (localStorage.getItem(STORAGE_KEYS.DEVICE_CODE) || DEFAULT_CONFIG.deviceCode).toUpperCase(),
       simulation: localStorage.getItem(STORAGE_KEYS.SIMULATION) === 'true'
     },
     mqttClient: null,
@@ -60,7 +57,7 @@
     bannerMessage: document.getElementById('bannerMessage'),
     bannerConfigBtn: document.getElementById('bannerConfigBtn'),
     lastUpdatedText: document.getElementById('lastUpdatedText'),
-    currentTopicText: document.getElementById('currentTopicText'),
+    currentDeviceCodeText: document.getElementById('currentDeviceCodeText'),
     livePill: document.getElementById('livePill'),
 
     // Sensores
@@ -95,9 +92,7 @@
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     cancelSettingsBtn: document.getElementById('cancelSettingsBtn'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-    brokerInput: document.getElementById('brokerInput'),
-    topicInput: document.getElementById('topicInput'),
-    ipInput: document.getElementById('ipInput'),
+    deviceCodeInput: document.getElementById('deviceCodeInput'),
     previewTopicSensors: document.getElementById('previewTopicSensors'),
     previewTopicCommands: document.getElementById('previewTopicCommands'),
     simulationToggle: document.getElementById('simulationToggle'),
@@ -110,13 +105,24 @@
   };
 
   /**
-   * Retorna os tópicos MQTT baseados na configuração
+   * Sanitiza e retorna o código único da estufa
+   */
+  function getCleanDeviceCode() {
+    let code = (state.config.deviceCode || DEFAULT_CONFIG.deviceCode).trim().toUpperCase();
+    code = code.replace(/[^A-Z0-9_\-]/g, '');
+    return code || DEFAULT_CONFIG.deviceCode;
+  }
+
+  /**
+   * Monta dinamicamente os tópicos MQTT com base no Código da Estufa
+   * - Sensores: estufa/<CODIGO>/sensores
+   * - Comandos: estufa/<CODIGO>/comandos
    */
   function getTopics() {
-    const base = (state.config.topicBase || DEFAULT_CONFIG.topicBase).replace(/^\/+|\/+$/g, '');
+    const code = getCleanDeviceCode();
     return {
-      sensors: `${base}/sensores`,
-      commands: `${base}/comandos`
+      sensors: `estufa/${code}/sensores`,
+      commands: `estufa/${code}/comandos`
     };
   }
 
@@ -163,9 +169,9 @@
 
     if (connected) {
       dom.statusDot.className = 'status-dot connected';
-      dom.statusText.textContent = text || 'Conectado (MQTT)';
+      dom.statusText.textContent = text || 'Conectado';
       dom.statusText.style.color = '#34d399';
-      dom.livePill.textContent = 'MQTT ONLINE';
+      dom.livePill.textContent = 'ONLINE';
       dom.connectionBanner.classList.add('hidden');
     } else {
       if (text && text.includes('Conectando')) {
@@ -205,9 +211,11 @@
 
     // 1. Meta Informações
     dom.lastUpdatedText.textContent = formatCurrentTime();
-    dom.currentTopicText.textContent = state.config.simulation 
-      ? 'Modo Demo (Local)' 
-      : getTopics().sensors;
+    if (dom.currentDeviceCodeText) {
+      dom.currentDeviceCodeText.textContent = state.config.simulation 
+        ? 'SIMULADO' 
+        : getCleanDeviceCode();
+    }
 
     // 2. Temperatura do Ar (DHT11)
     const temp = parseFloat(data.temp);
@@ -375,10 +383,9 @@
   }
 
   /**
-   * Conecta ao Broker MQTT via WebSocket Seguro (WSS)
+   * Conecta ao Broker MQTT via WebSocket Seguro (WSS) com o Código da Estufa
    */
   function connectMQTT() {
-    // Se estiver em modo simulação
     if (state.config.simulation) {
       if (state.mqttClient) {
         try { state.mqttClient.end(true); } catch (e) {}
@@ -391,14 +398,12 @@
 
     stopSimulationLoop();
 
-    // Verifica se a biblioteca MQTT.js foi carregada
     if (typeof mqtt === 'undefined') {
       console.error('MQTT.js não encontrado.');
-      setConnectionStatus(false, 'Erro MQTT', 'Não foi possível carregar a biblioteca MQTT.js. Verifique sua conexão com a internet.');
+      setConnectionStatus(false, 'Erro MQTT', 'Biblioteca MQTT não carregada. Verifique sua conexão com a internet.');
       return;
     }
 
-    // Se já houver cliente aberto, encerra antes de reconectar
     if (state.mqttClient) {
       try {
         state.mqttClient.removeAllListeners();
@@ -407,16 +412,15 @@
       state.mqttClient = null;
     }
 
-    setConnectionStatus(false, 'Conectando...', 'Conectando ao broker MQTT na nuvem...');
-    
-    const brokerUrl = (state.config.broker || DEFAULT_CONFIG.broker).trim();
+    const deviceCode = getCleanDeviceCode();
     const topics = getTopics();
-    const clientId = 'estufa_web_' + Math.random().toString(16).substring(2, 10);
+    const clientId = `web_${deviceCode}_` + Math.random().toString(16).substring(2, 8);
 
-    console.log(`[MQTT] Conectando a ${brokerUrl} com ClientId: ${clientId}`);
+    setConnectionStatus(false, 'Conectando...', `Conectando à estufa ${deviceCode} via nuvem...`);
+    console.log(`[MQTT] Conectando a ${FIXED_BROKER} | Código: ${deviceCode} | ClientId: ${clientId}`);
 
     try {
-      state.mqttClient = mqtt.connect(brokerUrl, {
+      state.mqttClient = mqtt.connect(FIXED_BROKER, {
         clientId: clientId,
         clean: true,
         connectTimeout: 8000,
@@ -425,18 +429,17 @@
       });
 
       state.mqttClient.on('connect', () => {
-        console.log('[MQTT] Conectado com sucesso ao Broker!');
-        setConnectionStatus(true, 'Conectado (MQTT)');
-        showToast('Conectado ao Broker MQTT!', 'success');
+        console.log(`[MQTT] Conectado! Subscrito em: ${topics.sensors}`);
+        setConnectionStatus(true, 'Conectado');
+        showToast(`Conectado à Estufa [${deviceCode}]!`, 'success');
 
-        // Inscreve-se no tópico de sensores da estufa
+        // Subscrição no tópico de sensores da estufa
         state.mqttClient.subscribe(topics.sensors, { qos: 0 }, (err) => {
           if (err) {
-            console.error('[MQTT] Erro ao assinar tópico de sensores:', err);
-            showToast('Erro ao subscrever tópico de sensores', 'error');
+            console.error('[MQTT] Erro ao subscrever:', err);
+            showToast('Erro ao subscrever sensores', 'error');
           } else {
-            console.log(`[MQTT] Subscrito com sucesso em: ${topics.sensors}`);
-            // Envia um pedido de status inicial para receber leitura imediata
+            // Solicita telemetria imediata
             requestStatusUpdate();
           }
         });
@@ -447,43 +450,38 @@
           try {
             const rawStr = payload.toString();
             const data = JSON.parse(rawStr);
-            setConnectionStatus(true, 'Conectado (MQTT)');
+            setConnectionStatus(true, 'Conectado');
             updateUI(data);
           } catch (err) {
-            console.error('[MQTT] Erro ao interpretar payload JSON:', err);
+            console.error('[MQTT] Erro ao ler JSON dos sensores:', err);
           }
         }
       });
 
       state.mqttClient.on('reconnect', () => {
-        console.warn('[MQTT] Reconectando ao broker...');
-        setConnectionStatus(false, 'Reconectando...', 'Conexão instável. Tentando restabelecer conexão com o Broker...');
+        setConnectionStatus(false, 'Reconectando...', 'Restabelecendo comunicação com a nuvem...');
       });
 
       state.mqttClient.on('close', () => {
-        console.warn('[MQTT] Conexão fechada.');
         if (!state.config.simulation) {
-          setConnectionStatus(false, 'Desconectado', 'Desconectado do Broker MQTT. Tentando reconectar automaticamente...');
+          setConnectionStatus(false, 'Desconectado', `Sem sinal da estufa ${deviceCode}. Tentando reconectar...`);
         }
       });
 
       state.mqttClient.on('offline', () => {
-        console.warn('[MQTT] Broker offline.');
-        setConnectionStatus(false, 'Offline', 'Broker MQTT offline ou sem conexão com a internet.');
+        setConnectionStatus(false, 'Offline', 'Conexão de internet indisponível ou broker offline.');
       });
 
       state.mqttClient.on('error', (err) => {
-        console.error('[MQTT] Erro:', err);
-        setConnectionStatus(false, 'Erro Conexão', `Falha ao conectar com o Broker: ${err.message || 'Erro de rede'}`);
+        setConnectionStatus(false, 'Erro', `Falha de rede: ${err.message || 'Erro de conexão'}`);
       });
     } catch (err) {
-      console.error('[MQTT] Exceção ao inicializar cliente MQTT:', err);
       setConnectionStatus(false, 'Erro', `Exceção: ${err.message}`);
     }
   }
 
   /**
-   * Envia pedido de telemetria imediata para a estufa
+   * Envia solicitação de leitura imediata
    */
   function requestStatusUpdate() {
     if (state.config.simulation) {
@@ -504,7 +502,7 @@
   }
 
   /**
-   * Envia comando para alternar estado do atuador via MQTT Publish
+   * Envia comando de acionamento do atuador via MQTT Publish
    */
   function toggleActuator(type, toggleElement) {
     const isPump = type === 'bomba';
@@ -526,7 +524,7 @@
     // Modo Nuvem MQTT
     if (!state.mqttClient || !state.connected) {
       toggleElement.checked = !toggleElement.checked;
-      showToast('Não conectado ao Broker MQTT! Conecte-se antes de enviar comandos.', 'error');
+      showToast('Não conectado à estufa! Aguarde a reconexão.', 'error');
       return;
     }
 
@@ -535,7 +533,6 @@
     const topics = getTopics();
     const commandName = isPump ? 'bomba_toggle' : 'ventoinha_toggle';
     
-    // Payload JSON padronizado aceito pelo ESP32
     const payload = JSON.stringify({
       comando: commandName,
       atuador: type,
@@ -549,7 +546,7 @@
 
       if (err) {
         toggleElement.checked = !toggleElement.checked;
-        showToast(`Erro ao publicar comando: ${err.message}`, 'error');
+        showToast(`Erro ao enviar comando: ${err.message}`, 'error');
       } else {
         showToast(`Comando enviado: ${isPump ? 'Bomba de Água' : 'Ventoinha'}!`, 'success');
       }
@@ -557,28 +554,25 @@
   }
 
   /**
-   * Atualiza a pré-visualização dos tópicos no modal
+   * Atualiza a pré-visualização dos tópicos automáticos no modal
    */
   function updateTopicPreviews() {
-    const base = (dom.topicInput.value.trim() || DEFAULT_CONFIG.topicBase).replace(/^\/+|\/+$/g, '');
-    dom.previewTopicSensors.textContent = `${base}/sensores`;
-    dom.previewTopicCommands.textContent = `${base}/comandos`;
+    let raw = dom.deviceCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9_\-]/g, '');
+    const code = raw || DEFAULT_CONFIG.deviceCode;
+    dom.previewTopicSensors.textContent = `estufa/${code}/sensores`;
+    dom.previewTopicCommands.textContent = `estufa/${code}/comandos`;
   }
 
   /**
    * Modal de Configurações
    */
   function openSettings() {
-    dom.brokerInput.value = state.config.broker;
-    dom.topicInput.value = state.config.topicBase;
-    if (dom.ipInput) {
-      dom.ipInput.value = state.config.ip || '';
-    }
+    dom.deviceCodeInput.value = getCleanDeviceCode();
     dom.simulationToggle.checked = state.config.simulation;
     dom.testResultText.textContent = '';
     updateTopicPreviews();
     dom.settingsModal.classList.remove('hidden');
-    dom.topicInput.focus();
+    dom.deviceCodeInput.focus();
   }
 
   function closeSettings() {
@@ -586,26 +580,21 @@
   }
 
   function saveSettings() {
-    const newBroker = dom.brokerInput.value.trim() || DEFAULT_CONFIG.broker;
-    const newTopic = dom.topicInput.value.trim() || DEFAULT_CONFIG.topicBase;
-    const newIp = dom.ipInput ? dom.ipInput.value.trim() : (state.config.ip || DEFAULT_CONFIG.ip);
+    let raw = dom.deviceCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9_\-]/g, '');
+    const newCode = raw || DEFAULT_CONFIG.deviceCode;
     const newSimMode = dom.simulationToggle.checked;
 
-    state.config.broker = newBroker;
-    state.config.topicBase = newTopic;
-    state.config.ip = newIp;
+    state.config.deviceCode = newCode;
     state.config.simulation = newSimMode;
 
-    // Salvamento automático persistente no localStorage do navegador
-    localStorage.setItem(STORAGE_KEYS.BROKER, newBroker);
-    localStorage.setItem(STORAGE_KEYS.TOPIC_BASE, newTopic);
-    localStorage.setItem(STORAGE_KEYS.IP, newIp);
+    // Salvamento automático persistente no localStorage
+    localStorage.setItem(STORAGE_KEYS.DEVICE_CODE, newCode);
     localStorage.setItem(STORAGE_KEYS.SIMULATION, newSimMode);
 
     closeSettings();
-    showToast('Configurações salvas no seu navegador!', 'success');
+    showToast(`Código ${newCode} salvo no seu navegador!`, 'success');
     
-    // Reconecta com as novas configurações
+    // Reconecta com o novo código
     connectMQTT();
   }
 
@@ -613,41 +602,31 @@
    * Redefine as configurações e limpa o localStorage (Esquecer Dispositivo)
    */
   function resetSettings() {
-    if (!confirm('Deseja realmente esquecer este dispositivo e limpar as configurações salvas?')) {
+    if (!confirm('Deseja realmente esquecer este dispositivo e restaurar o código padrão?')) {
       return;
     }
 
-    // Remove do localStorage
-    localStorage.removeItem(STORAGE_KEYS.BROKER);
-    localStorage.removeItem(STORAGE_KEYS.TOPIC_BASE);
-    localStorage.removeItem(STORAGE_KEYS.IP);
+    localStorage.removeItem(STORAGE_KEYS.DEVICE_CODE);
     localStorage.removeItem(STORAGE_KEYS.SIMULATION);
 
-    // Restaura configurações padrão
-    state.config.broker = DEFAULT_CONFIG.broker;
-    state.config.topicBase = DEFAULT_CONFIG.topicBase;
-    state.config.ip = DEFAULT_CONFIG.ip;
+    state.config.deviceCode = DEFAULT_CONFIG.deviceCode;
     state.config.simulation = DEFAULT_CONFIG.simulation;
 
-    // Atualiza campos visuais
-    dom.brokerInput.value = DEFAULT_CONFIG.broker;
-    dom.topicInput.value = DEFAULT_CONFIG.topicBase;
-    if (dom.ipInput) dom.ipInput.value = DEFAULT_CONFIG.ip;
+    dom.deviceCodeInput.value = DEFAULT_CONFIG.deviceCode;
     dom.simulationToggle.checked = DEFAULT_CONFIG.simulation;
     updateTopicPreviews();
 
     closeSettings();
-    showToast('Configurações redefinidas para o padrão!', 'info');
+    showToast('Dispositivo esquecido. Código restaurado para o padrão!', 'info');
 
-    // Reconecta usando os padrões
     connectMQTT();
   }
 
   /**
-   * Testa e reconecta manualmente ao Broker
+   * Testa e reconecta manualmente
    */
   function manualReconnect() {
-    dom.testResultText.textContent = 'Tentando conectar ao broker MQTT...';
+    dom.testResultText.textContent = 'Testando conexão com a nuvem...';
     dom.testResultText.className = 'test-result-text';
     dom.reconnectBtn.disabled = true;
 
@@ -660,11 +639,10 @@
       return;
     }
 
-    const testBroker = dom.brokerInput.value.trim() || DEFAULT_CONFIG.broker;
     const testClientId = 'test_' + Math.random().toString(16).substring(2, 8);
 
     try {
-      const testClient = mqtt.connect(testBroker, {
+      const testClient = mqtt.connect(FIXED_BROKER, {
         clientId: testClientId,
         clean: true,
         connectTimeout: 5000
@@ -672,14 +650,14 @@
 
       const timeoutId = setTimeout(() => {
         try { testClient.end(true); } catch(e){}
-        dom.testResultText.textContent = '✕ Tempo limite excedido ao contatar o Broker.';
+        dom.testResultText.textContent = '✕ Tempo limite ao contatar o servidor.';
         dom.testResultText.className = 'test-result-text error';
         dom.reconnectBtn.disabled = false;
       }, 6000);
 
       testClient.on('connect', () => {
         clearTimeout(timeoutId);
-        dom.testResultText.textContent = '✓ Conexão WebSocket MQTT realizada com sucesso!';
+        dom.testResultText.textContent = '✓ Conexão com o Broker HiveMQ realizada com sucesso!';
         dom.testResultText.className = 'test-result-text success';
         dom.reconnectBtn.disabled = false;
         try { testClient.end(true); } catch(e){}
@@ -711,7 +689,7 @@
     dom.refreshBtn.addEventListener('click', () => {
       dom.refreshBtn.classList.add('spinning');
       requestStatusUpdate();
-      showToast('Solicitação de leitura enviada via MQTT!', 'info');
+      showToast('Solicitação de leitura enviada!', 'info');
       setTimeout(() => dom.refreshBtn.classList.remove('spinning'), 700);
     });
 
@@ -725,7 +703,7 @@
     if (dom.resetConfigBtn) {
       dom.resetConfigBtn.addEventListener('click', resetSettings);
     }
-    dom.topicInput.addEventListener('input', updateTopicPreviews);
+    dom.deviceCodeInput.addEventListener('input', updateTopicPreviews);
 
     // Fechar modal ao clicar fora
     dom.settingsModal.addEventListener('click', (e) => {
@@ -754,9 +732,11 @@
    */
   function init() {
     setupEventListeners();
-    dom.currentTopicText.textContent = state.config.simulation 
-      ? 'Modo Demo (Local)' 
-      : getTopics().sensors;
+    if (dom.currentDeviceCodeText) {
+      dom.currentDeviceCodeText.textContent = state.config.simulation 
+        ? 'SIMULADO' 
+        : getCleanDeviceCode();
+    }
 
     connectMQTT();
   }
