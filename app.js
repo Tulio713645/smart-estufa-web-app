@@ -10,6 +10,7 @@
   const STORAGE_KEYS = {
     BROKER: 'greenhouse_mqtt_broker',
     TOPIC_BASE: 'greenhouse_mqtt_topic',
+    IP: 'greenhouse_ip',
     SIMULATION: 'greenhouse_simulation_mode'
   };
 
@@ -17,14 +18,16 @@
   const DEFAULT_CONFIG = {
     broker: 'wss://broker.hivemq.com:8884/mqtt',
     topicBase: 'estufa/Tulio',
+    ip: '192.168.4.1',
     simulation: false
   };
 
-  // Estado da aplicação
+  // Estado da aplicação (carrega dados pré-salvos no localStorage ou usa o padrão)
   const state = {
     config: {
       broker: localStorage.getItem(STORAGE_KEYS.BROKER) || DEFAULT_CONFIG.broker,
       topicBase: localStorage.getItem(STORAGE_KEYS.TOPIC_BASE) || DEFAULT_CONFIG.topicBase,
+      ip: localStorage.getItem(STORAGE_KEYS.IP) || DEFAULT_CONFIG.ip,
       simulation: localStorage.getItem(STORAGE_KEYS.SIMULATION) === 'true'
     },
     mqttClient: null,
@@ -94,10 +97,12 @@
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
     brokerInput: document.getElementById('brokerInput'),
     topicInput: document.getElementById('topicInput'),
+    ipInput: document.getElementById('ipInput'),
     previewTopicSensors: document.getElementById('previewTopicSensors'),
     previewTopicCommands: document.getElementById('previewTopicCommands'),
     simulationToggle: document.getElementById('simulationToggle'),
     reconnectBtn: document.getElementById('reconnectBtn'),
+    resetConfigBtn: document.getElementById('resetConfigBtn'),
     testResultText: document.getElementById('testResultText'),
 
     // Toast
@@ -566,11 +571,14 @@
   function openSettings() {
     dom.brokerInput.value = state.config.broker;
     dom.topicInput.value = state.config.topicBase;
+    if (dom.ipInput) {
+      dom.ipInput.value = state.config.ip || '';
+    }
     dom.simulationToggle.checked = state.config.simulation;
     dom.testResultText.textContent = '';
     updateTopicPreviews();
     dom.settingsModal.classList.remove('hidden');
-    dom.brokerInput.focus();
+    dom.topicInput.focus();
   }
 
   function closeSettings() {
@@ -580,20 +588,58 @@
   function saveSettings() {
     const newBroker = dom.brokerInput.value.trim() || DEFAULT_CONFIG.broker;
     const newTopic = dom.topicInput.value.trim() || DEFAULT_CONFIG.topicBase;
+    const newIp = dom.ipInput ? dom.ipInput.value.trim() : (state.config.ip || DEFAULT_CONFIG.ip);
     const newSimMode = dom.simulationToggle.checked;
 
     state.config.broker = newBroker;
     state.config.topicBase = newTopic;
+    state.config.ip = newIp;
     state.config.simulation = newSimMode;
 
+    // Salvamento automático persistente no localStorage do navegador
     localStorage.setItem(STORAGE_KEYS.BROKER, newBroker);
     localStorage.setItem(STORAGE_KEYS.TOPIC_BASE, newTopic);
+    localStorage.setItem(STORAGE_KEYS.IP, newIp);
     localStorage.setItem(STORAGE_KEYS.SIMULATION, newSimMode);
 
     closeSettings();
-    showToast('Configurações salvas! Reconectando...', 'success');
+    showToast('Configurações salvas no seu navegador!', 'success');
     
     // Reconecta com as novas configurações
+    connectMQTT();
+  }
+
+  /**
+   * Redefine as configurações e limpa o localStorage (Esquecer Dispositivo)
+   */
+  function resetSettings() {
+    if (!confirm('Deseja realmente esquecer este dispositivo e limpar as configurações salvas?')) {
+      return;
+    }
+
+    // Remove do localStorage
+    localStorage.removeItem(STORAGE_KEYS.BROKER);
+    localStorage.removeItem(STORAGE_KEYS.TOPIC_BASE);
+    localStorage.removeItem(STORAGE_KEYS.IP);
+    localStorage.removeItem(STORAGE_KEYS.SIMULATION);
+
+    // Restaura configurações padrão
+    state.config.broker = DEFAULT_CONFIG.broker;
+    state.config.topicBase = DEFAULT_CONFIG.topicBase;
+    state.config.ip = DEFAULT_CONFIG.ip;
+    state.config.simulation = DEFAULT_CONFIG.simulation;
+
+    // Atualiza campos visuais
+    dom.brokerInput.value = DEFAULT_CONFIG.broker;
+    dom.topicInput.value = DEFAULT_CONFIG.topicBase;
+    if (dom.ipInput) dom.ipInput.value = DEFAULT_CONFIG.ip;
+    dom.simulationToggle.checked = DEFAULT_CONFIG.simulation;
+    updateTopicPreviews();
+
+    closeSettings();
+    showToast('Configurações redefinidas para o padrão!', 'info');
+
+    // Reconecta usando os padrões
     connectMQTT();
   }
 
@@ -676,6 +722,9 @@
     dom.cancelSettingsBtn.addEventListener('click', closeSettings);
     dom.saveSettingsBtn.addEventListener('click', saveSettings);
     dom.reconnectBtn.addEventListener('click', manualReconnect);
+    if (dom.resetConfigBtn) {
+      dom.resetConfigBtn.addEventListener('click', resetSettings);
+    }
     dom.topicInput.addEventListener('input', updateTopicPreviews);
 
     // Fechar modal ao clicar fora

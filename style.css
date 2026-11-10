@@ -1120,6 +1120,57 @@ input:checked + .slider:before {
   color: #f87171;
 }
 
+/* Indicador de persistência no localStorage */
+.storage-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7813rem;
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.22);
+  padding: 0.6rem 0.85rem;
+  border-radius: var(--radius-md);
+  line-height: 1.35;
+}
+
+.storage-indicator svg {
+  flex-shrink: 0;
+  color: #10b981;
+}
+
+/* Seção de Redefinir / Esquecer Dispositivo */
+.reset-section {
+  padding-top: 0.25rem;
+  display: flex;
+  justify-content: flex-start;
+}
+
+.btn-danger-outline {
+  background: transparent;
+  border: 1px dashed rgba(244, 63, 94, 0.4);
+  color: #fca5a5;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.7813rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.btn-danger-outline:hover {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.75);
+  color: #ffffff;
+}
+
+.btn-danger-outline:active {
+  transform: scale(0.97);
+}
+
 /* Botões do Modal */
 .modal-footer {
   padding: 1rem 1.5rem;

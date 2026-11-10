@@ -347,6 +347,30 @@
           </small>
         </div>
 
+        <div class="form-group">
+          <label for="ipInput">Endereço IP Local do Módulo (Opcional)</label>
+          <div class="input-with-prefix">
+            <input 
+              type="text" 
+              id="ipInput" 
+              placeholder="ex: 192.168.1.150 ou 192.168.4.1" 
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </div>
+          <small class="form-help">Salvo como referência para conexões locais ou diagnósticos.</small>
+        </div>
+
+        <!-- Indicador de Persistência no LocalStorage -->
+        <div class="storage-indicator">
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+            <polyline points="7 3 7 8 15 8"></polyline>
+          </svg>
+          <span>As configurações são salvas automaticamente no <strong>localStorage</strong> do seu navegador.</span>
+        </div>
+
         <!-- Modo Demonstração / Simulação -->
         <div class="form-group simulation-group">
           <div class="sim-toggle-row">
@@ -372,6 +396,17 @@
             Reconectar ao Broker Agora
           </button>
           <span class="test-result-text" id="testResultText"></span>
+        </div>
+
+        <!-- Opção de Limpar Dados / Esquecer Dispositivo -->
+        <div class="reset-section">
+          <button type="button" class="btn-danger-outline" id="resetConfigBtn" title="Apagar dados e redefinir para o padrão">
+            <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            Esquecer Dispositivo / Limpar Configurações
+          </button>
         </div>
       </div>
 
