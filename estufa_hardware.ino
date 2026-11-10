@@ -1,314 +1,326 @@
 /*
  * =========================================================================================
- * ESTUFA INTELIGENTE - CÓDIGO PRINCIPAL PARA ARDUINO UNO + DISPLAY LCD 16x2
+ * ESTUFA INTELIGENTE - CÓDIGO ARDUINO UNO + BLUETOOTH (HC-05 / HC-06 / HM-10)
  * Arquivo: estufa_hardware.ino
  * =========================================================================================
  * 
- * Este sketch roda no ARDUINO UNO e gerencia os sensores, relés e a TELA LCD da estufa.
- * A comunicação remota é feita através do Adaptador Wi-Fi ESP-01 conectado via Serial.
- *
- * RECURSOS DA TELA LCD 16x2:
- *  - Na Inicialização: Exibe o nome da estufa e o CÓDIGO DE PAREAMENTO (ex: ESTUFA-A1B2).
- *  - Na Conexão do App: Exibe a confirmação visual "✓ PAREADO COM SUCESSO!".
- *  - No Dia a Dia: Exibe Temperatura, Umidade do Ar, Umidade do Solo e Nível de Água.
- *  - Nos Comandos: Exibe na hora o status de acionamento ("BOMBA LIGADA", "COOLER LIGADO").
- *
- * ESQUEMA DE LIGAÇÃO DOS PINOS NO ARDUINO UNO:
- *  - Display LCD 16x2 com I2C:
- *      * SDA ➔ Pino Analógico A4 do Arduino Uno
- *      * SCL ➔ Pino Analógico A5 do Arduino Uno
- *      * VCC ➔ 5V | GND ➔ GND
- *  - Adaptador Wi-Fi ESP-01:
- *      * Pino Digital 2 (RX) <--- Conectar no TX do ESP-01
- *      * Pino Digital 3 (TX) ---> Conectar no RX do ESP-01 (via divisor 5V->3.3V)
- *  - Sensores & Relés:
- *      * Pino Digital 4      <--- Sensor DHT11 (Pino de Dados)
- *      * Pino Digital 5      ---> Relé 1 (Bomba de Irrigação)
- *      * Pino Digital 6      ---> Relé 2 (Ventoinha / Cooler)
- *      * Pino Digital 7      <--- Sensor Boia de Nível (INPUT_PULLUP)
- *      * Pino Analógico A0   <--- Sensor Higrômetro do Solo Analógico
- *      * Pino Digital 13     ---> LED de Status de Pareamento (Onboard)
- *
- * BIBLIOTECAS NECESSÁRIAS (Instalar via Gerenciador de Bibliotecas da Arduino IDE):
- *  1. "LiquidCrystal I2C" por Frank de Brabander (ou Marco Schwartz)
- *  2. "DHT sensor library" por Adafruit
- *  3. "Adafruit Unified Sensor" por Adafruit
+ * Baseado no código original do usuário com:
+ *  - Sensor DHT11 no Pino Digital 6
+ *  - Relé da Bomba de Água no Pino Digital 10 (Active-Low)
+ *  - Sensor de Umidade do Solo no Pino Analógico A0
+ *  - Display LCD 16x2 com I2C (0x27) com Ícones Customizados de Termômetro e Gota
+ *  - Comunicação Bluetooth (SoftwareSerial nos Pinos 2 e 3 + Serial USB nos Pinos 0 e 1)
+ *  - Preparado para Sensor de Nível de Água (Pino 7) e Ventoinha (Pino 8)
  * =========================================================================================
  */
 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
-#include <SoftwareSerial.h>
 #include <DHT.h>
+#include <SoftwareSerial.h>
 
-// =========================================================================================
-// 1. PINAGEM E CONFIGURAÇÕES
-// =========================================================================================
-#define CODIGO_ESTUFA    "ESTUFA-A1B2"  // Código padrão exibido no visor LCD
+// --- PINOS E CONFIGURAÇÕES DO USUÁRIO ---
+#define DHTPIN 6
+#define DHTTYPE DHT11
+#define PIN_RELE 10       // Relé da Bomba de Água (Active-Low)
+#define PIN_SOLO A0       // Higrômetro do Solo Analógico
 
-// Comunicação Serial com o Adaptador Wi-Fi ESP-01
-#define PIN_ESP_RX       2   // Arduino RX (recebe do TX do ESP-01)
-#define PIN_ESP_TX       3   // Arduino TX (envia para o RX do ESP-01)
+// --- PINOS DE COMUNICAÇÃO BLUETOOTH ---
+// Conecte o módulo Bluetooth nos pinos 2 e 3:
+//   - Pino 2 (RX do Arduino) <--- Conectar no TX do módulo Bluetooth
+//   - Pino 3 (TX do Arduino) ---> Conectar no RX do módulo Bluetooth (via divisor se for 3.3V)
+#define PIN_BT_RX 2
+#define PIN_BT_TX 3
 
-// Sensores e Atuadores
-#define PIN_DHT          4   // Sensor DHT11
-#define PIN_RELE_BOMBA   5   // Relé Bomba de Água
-#define PIN_RELE_VENT    6   // Relé Ventoinha / Cooler
-#define PIN_BOIA_AGUA    7   // Sensor Boia de Nível
-#define PIN_LED_STATUS   13  // LED Onboard de confirmação de pareamento
-#define PIN_SOLO_ADC     A0  // Higrômetro Analógico de Solo
+// --- PINOS PREPARADOS PARA AMANHÃ ---
+#define PIN_BOIA 7        // Boia de Nível de Água (quando for instalar amanhã)
+#define PIN_VENTOINHA 8   // Relé da Ventoinha / Cooler (quando for instalar amanhã)
 
-#define TIPO_DHT DHT11
-DHT dht(PIN_DHT, TIPO_DHT);
-
-// Configuração do Display LCD 16x2 com I2C (endereço 0x27 ou 0x3F)
+// Inicialização dos Sensores, Display e Bluetooth
+DHT dht(DHTPIN, DHTTYPE);
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+SoftwareSerial btSerial(PIN_BT_RX, PIN_BT_TX);
 
-// Comunicação serial por software com o ESP-01 a 9600 baud
-SoftwareSerial espSerial(PIN_ESP_RX, PIN_ESP_TX);
+// --- ÍCONES PERSONALIZADOS DO USUÁRIO (5x8 pixels) ---
+byte iconeTermometro[8] = {
+  B00100, //   *  
+  B01010, //  * * 
+  B01010, //  * * 
+  B01010, //  * * 
+  B01110, //  *** 
+  B11111, // ***** 
+  B11111, // ***** 
+  B01110  //  *** 
+};
 
-// Lógica de acionamento do módulo relé (normalmente LOW = Ligado, HIGH = Desligado)
-const uint8_t RELE_LIGADO    = LOW;
-const uint8_t RELE_DESLIGADO = HIGH;
+byte iconeGotinha[8] = {
+  B00100, //   *   
+  B00100, //   *  
+  B01110, //  *** 
+  B01110, //  *** 
+  B11111, // ***** 
+  B11111, // ***** 
+  B11111, // ***** 
+  B01110  //  ***  
+};
 
-// =========================================================================================
-// 2. VARIÁVEIS DE ESTADO
-// =========================================================================================
-bool estadoBomba = false;
-bool estadoVentoinha = false;
-bool appConectado = false;
+// --- CALIBRAÇÃO DO SENSOR DE UMIDADE DO SOLO ---
+const int LIMITE_SECO = 850;   
+const int LIMITE_MOLHADO = 300; 
+const int UMIDADE_LIGAR_REGA = 30; 
 
-// Controle de mensagens temporárias no LCD
-unsigned long tempoBloqueioLcd = 0;
+// Controle de Tempo e Telas
+unsigned long ultimoTempoLeitura = 0;
+const long intervaloLeitura = 500; // Lê sensores a cada 500ms
 
-// Intervalo de leitura e envio periódico (3000 ms = 3 segundos)
-unsigned long ultimoEnvio = 0;
-const unsigned long INTERVALO_ENVIO = 3000;
+unsigned long ultimaTrocaTela = 0;
+const long tempoExibicaoTela = 3000; // Alterna LCD a cada 3 segundos
+int telaAtual = 1;
 
-// Calibração do Higrômetro de Solo no Arduino Uno (ADC 10 bits: 0 a 1023)
-const int SOLO_VALOR_SECO  = 850;
-const int SOLO_VALOR_UMIDO = 350;
+// Envio de telemetria via Bluetooth a cada 1500ms
+unsigned long ultimoEnvioBT = 0;
+const long intervaloEnvioBT = 1500;
 
-// Buffer de recepção de comandos do ESP-01
-char bufferCmd[32];
+// Variáveis globais para guardar os dados
+int porcentagemSolo = 0;
+float tempAr = 0;
+float humAr = 0;
+bool bombaLigada = false;
+bool ventoinhaLigada = false;
+
+// Controle Manual via Bluetooth vs Automático
+bool controleManualBomba = false;
+unsigned long tempoFimManualBomba = 0;
+
+// Buffer de comandos seriais
+char bufferComando[32];
 uint8_t idxCmd = 0;
 
 // =========================================================================================
-// 3. FUNÇÕES DO DISPLAY LCD 16x2
+// FUNÇÕES AUXILIARES
 // =========================================================================================
 
-// Exibe mensagem temporária de destaque no LCD
-void mostrarMensagemLcd(const __FlashStringHelper* l1, const __FlashStringHelper* l2, unsigned long duracaoMs) {
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(l1);
-  lcd.setCursor(0, 1);
-  lcd.print(l2);
-  tempoBloqueioLcd = millis() + duracaoMs;
+// Envia telemetria JSON para o App Web (via Bluetooth nos pinos 2/3 e USB nos pinos 0/1)
+void enviarTelemetriaBluetooth() {
+  // Monta JSON compatível com o aplicativo Web
+  // {"temp":25.5,"umidade_ar":60,"umidade_solo":45,"nivel_agua":"OK","bomba":0,"ventoinha":0}
+  String json = F("{\"temp\":");
+  json += String(tempAr, 1);
+  json += F(",\"umidade_ar\":");
+  json += String((int)humAr);
+  json += F(",\"umidade_solo\":");
+  json += String(porcentagemSolo);
+  json += F(",\"nivel_agua\":\"OK\","); // Fixo OK enquanto não coloca a boia amanhã
+  json += F("\"bomba\":");
+  json += String(bombaLigada ? 1 : 0);
+  json += F(",\"ventoinha\":");
+  json += String(ventoinhaLigada ? 1 : 0);
+  json += F("}\n");
+
+  // Envia no Bluetooth e no Monitor Serial USB ao mesmo tempo
+  btSerial.print(json);
+  Serial.print(json);
 }
 
-// Atualiza o visor LCD com as leituras normais de sensores
-void atualizarLcdSensores(float temp, float humAr, int humSolo, bool boiaOk) {
-  // Se houver uma mensagem de destaque ativa (ex: pareamento ou botão), não sobrescreve
-  if (millis() < tempoBloqueioLcd) return;
-
-  // Linha 1: Temperatura e Umidade do Ar
-  lcd.setCursor(0, 0);
-  lcd.print(F("T:"));
-  lcd.print(temp, 1);
-  lcd.print(F("C U:"));
-  lcd.print((int)humAr);
-  lcd.print(F("%   "));
-
-  // Linha 2: Umidade do Solo e Nível de Água
-  lcd.setCursor(0, 1);
-  lcd.print(F("Solo:"));
-  lcd.print(humSolo);
-  lcd.print(F("% "));
-  lcd.print(boiaOk ? F("Ag:OK  ") : F("Ag:CRIT"));
-}
-
-// Confirmação visual na tela quando o usuário conecta no celular
-void exibirConfirmacaoPareamento() {
-  appConectado = true;
-
-  // Pisca o LED onboard 3 vezes
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(PIN_LED_STATUS, HIGH);
-    delay(100);
-    digitalWrite(PIN_LED_STATUS, LOW);
-    delay(100);
-  }
-  digitalWrite(PIN_LED_STATUS, HIGH); // Deixa aceso indicando conectado
-
-  // Mostra a confirmação bonita no visor LCD
-  mostrarMensagemLcd(F("PAREADO COM APP!"), F("✓ CONECTADO OK"), 3500);
-
-  Serial.println(F("\n[LCD] *** PAREAMENTO CONFIRMADO COM O APP WEB! ***"));
-}
-
-// =========================================================================================
-// 4. LEITURA DOS SENSORES E ENVIO SERIAL AO ESP-01
-// =========================================================================================
-int lerUmidadeSolo() {
-  int raw = analogRead(PIN_SOLO_ADC);
-  int clamped = constrain(raw, SOLO_VALOR_UMIDO, SOLO_VALOR_SECO);
-  int pct = map(clamped, SOLO_VALOR_SECO, SOLO_VALOR_UMIDO, 0, 100);
-  return constrain(pct, 0, 100);
-}
-
-void enviarTelemetria() {
-  float temp = dht.readTemperature();
-  float humAr = dht.readHumidity();
-
-  if (isnan(temp)) temp = 25.0;
-  if (isnan(humAr)) humAr = 55.0;
-
-  int humSolo = lerUmidadeSolo();
-  bool boiaOk = (digitalRead(PIN_BOIA_AGUA) == LOW);
-
-  // 1. Envia telemetria serial para o Adaptador ESP-01 publicar via MQTT
-  espSerial.print(F("DATA:{\"temp\":"));
-  espSerial.print(temp, 1);
-  espSerial.print(F(",\"umidade_ar\":"));
-  espSerial.print((int)humAr);
-  espSerial.print(F(",\"umidade_solo\":"));
-  espSerial.print(humSolo);
-  espSerial.print(F(",\"nivel_agua\":\""));
-  espSerial.print(boiaOk ? F("OK") : F("CRITICO"));
-  espSerial.print(F("\",\"bomba\":"));
-  espSerial.print(estadoBomba ? 1 : 0);
-  espSerial.print(F(",\"ventoinha\":"));
-  espSerial.print(estadoVentoinha ? 1 : 0);
-  espSerial.println(F("}"));
-
-  // 2. Atualiza a tela LCD do Arduino
-  atualizarLcdSensores(temp, humAr, humSolo, boiaOk);
-
-  // Debug Serial USB
-  Serial.print(F("[TELEMETRIA] T: "));
-  Serial.print(temp, 1);
-  Serial.print(F("C | Ar: "));
-  Serial.print((int)humAr);
-  Serial.print(F("% | Solo: "));
-  Serial.print(humSolo);
-  Serial.print(F("% | Boia: "));
-  Serial.println(boiaOk ? F("OK") : F("CRIT"));
-}
-
-// =========================================================================================
-// 5. PROCESSAMENTO DE COMANDOS RECEBIDOS DO ESP-01
-// =========================================================================================
+// Processa comandos enviados pelo App Web via Bluetooth
 void processarComando(const char* cmd) {
-  Serial.print(F("[COMANDO DO ESP-01]: "));
+  Serial.print(F("[BT COMANDO]: "));
   Serial.println(cmd);
-
-  // Comando de Pareamento recebido do App Web
-  if (strstr(cmd, "parear") != NULL || strstr(cmd, "PAREAR") != NULL) {
-    exibirConfirmacaoPareamento();
-    enviarTelemetria();
-    return;
-  }
-
-  bool mudouEstado = false;
 
   // Comando: Alternar Bomba de Água
   if (strstr(cmd, "bomba_toggle") != NULL || strstr(cmd, "BOMBA") != NULL) {
-    estadoBomba = !estadoBomba;
-    digitalWrite(PIN_RELE_BOMBA, estadoBomba ? RELE_LIGADO : RELE_DESLIGADO);
-    mudouEstado = true;
+    bombaLigada = !bombaLigada;
+    digitalWrite(PIN_RELE, bombaLigada ? LOW : HIGH); // Active-Low: LOW liga, HIGH desliga
     
-    // Mostra no LCD a confirmação da ação do usuário
-    mostrarMensagemLcd(F("BOMBA DE AGUA:"), estadoBomba ? F(">>> LIGADA <<<") : F(">>> DESLIGADA"), 2200);
-    
-    Serial.print(F("-> Bomba alterada: "));
-    Serial.println(estadoBomba ? F("LIGADA") : F("DESLIGADA"));
-  }
-  // Comando: Alternar Ventoinha / Cooler
-  else if (strstr(cmd, "ventoinha_toggle") != NULL || strstr(cmd, "VENT") != NULL) {
-    estadoVentoinha = !estadoVentoinha;
-    digitalWrite(PIN_RELE_VENT, estadoVentoinha ? RELE_LIGADO : RELE_DESLIGADO);
-    mudouEstado = true;
-    
-    // Mostra no LCD a confirmação da ação do usuário
-    mostrarMensagemLcd(F("VENTOINHA/COOLER:"), estadoVentoinha ? F(">>> LIGADA <<<") : F(">>> DESLIGADA"), 2200);
-    
-    Serial.print(F("-> Ventoinha alterada: "));
-    Serial.println(estadoVentoinha ? F("LIGADA") : F("DESLIGADA"));
-  }
+    // Ativa modo manual por 30 segundos (ou até o usuário alternar de novo)
+    controleManualBomba = true;
+    tempoFimManualBomba = millis() + 30000;
 
-  // Se mudou estado ou pediu status, atualiza telemetria imediatamente
-  if (mudouEstado || strstr(cmd, "status") != NULL || strstr(cmd, "STATUS") != NULL) {
-    enviarTelemetria();
+    // Feedback no LCD
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("COMANDO APP:"));
+    lcd.setCursor(0, 1);
+    lcd.print(bombaLigada ? F("BOMBA LIGADA!") : F("BOMBA DESLIGADA"));
+    delay(1200);
+    lcd.clear();
+
+    enviarTelemetriaBluetooth();
+  }
+  // Comando: Alternar Ventoinha (preparado para amanhã)
+  else if (strstr(cmd, "ventoinha_toggle") != NULL || strstr(cmd, "VENT") != NULL) {
+    ventoinhaLigada = !ventoinhaLigada;
+    digitalWrite(PIN_VENTOINHA, ventoinhaLigada ? LOW : HIGH);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("COMANDO APP:"));
+    lcd.setCursor(0, 1);
+    lcd.print(ventoinhaLigada ? F("COOLER LIGADO!") : F("COOLER DESLIGADO"));
+    delay(1200);
+    lcd.clear();
+
+    enviarTelemetriaBluetooth();
+  }
+  // Comando: Solicitar leitura imediata
+  else if (strstr(cmd, "status") != NULL || strstr(cmd, "STATUS") != NULL) {
+    enviarTelemetriaBluetooth();
   }
 }
 
 // =========================================================================================
-// 6. SETUP E LOOP PRINCIPAL
+// SETUP
 // =========================================================================================
 void setup() {
-  Serial.begin(115200);
-  delay(150);
-  Serial.println(F("\n=============================================="));
-  Serial.println(F(" ESTUFA INTELIGENTE - ARDUINO UNO + LCD 16x2"));
-  Serial.println(F("=============================================="));
+  Serial.begin(9600);       // Monitor Serial USB
+  btSerial.begin(9600);     // Comunicação com o módulo Bluetooth HC-05 / HC-06 / HM-10
+  
+  pinMode(PIN_RELE, OUTPUT);
+  digitalWrite(PIN_RELE, HIGH); // Relé Active-Low: HIGH desliga a bomba
 
-  // Inicializa o Display LCD 16x2 I2C
+  // Prepara os pinos adicionais para amanhã
+  pinMode(PIN_VENTOINHA, OUTPUT);
+  digitalWrite(PIN_VENTOINHA, HIGH); // Desligada inicialmente
+  pinMode(PIN_BOIA, INPUT_PULLUP);
+
   lcd.init();
   lcd.backlight();
-  lcd.clear();
-
-  // Mensagem inicial de Inicialização e Código da Estufa
-  lcd.setCursor(0, 0);
-  lcd.print(F("ESTUFA ONLINE"));
-  lcd.setCursor(0, 1);
-  lcd.print(F("COD: "));
-  lcd.print(F(CODIGO_ESTUFA));
-  tempoBloqueioLcd = millis() + 4000; // Fica na tela por 4 segundos
-
-  // Comunicação serial com o adaptador ESP-01
-  espSerial.begin(9600);
-
-  // Configuração dos Pinos dos Relés e LED
-  pinMode(PIN_RELE_BOMBA, OUTPUT);
-  pinMode(PIN_RELE_VENT, OUTPUT);
-  pinMode(PIN_LED_STATUS, OUTPUT);
-  digitalWrite(PIN_RELE_BOMBA, RELE_DESLIGADO);
-  digitalWrite(PIN_RELE_VENT, RELE_DESLIGADO);
-  digitalWrite(PIN_LED_STATUS, LOW);
-
-  // Sensor de Boia
-  pinMode(PIN_BOIA_AGUA, INPUT_PULLUP);
-
-  // Sensor DHT11
   dht.begin();
 
-  Serial.println(F("[ARDUINO] Sistema e LCD inicializados."));
-  Serial.print(F("[ARDUINO] Codigo de Pareamento: "));
-  Serial.println(F(CODIGO_ESTUFA));
+  // Registra os ícones na memória do LCD (0 e 1)
+  lcd.createChar(0, iconeTermometro);
+  lcd.createChar(1, iconeGotinha);
+
+  // Contagem decrescente original do usuário (7 segundos)
+  for (int i = 7; i > 0; i--) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(F("Estufa Automatica"));
+    lcd.setCursor(0, 1);
+    lcd.print(F("Iniciando em: "));
+    lcd.print(i);
+    lcd.print(F("s"));
+    delay(1000);
+  }
+
+  lcd.clear();
+  Serial.println(F("[ARDUINO] Estufa pronta e aguardando conexao Bluetooth..."));
 }
 
+// =========================================================================================
+// LOOP PRINCIPAL
+// =========================================================================================
 void loop() {
-  // 1. Escuta comandos seriais vindos do ESP-01 (enviados pelo App Web)
-  while (espSerial.available() > 0) {
-    char c = espSerial.read();
+  unsigned long tempoAtual = millis();
+
+  // --- 1. LEITURA DE COMANDOS VINDOS DO BLUETOOTH (Pinos 2/3 ou Serial USB) ---
+  while (btSerial.available() > 0) {
+    char c = btSerial.read();
     if (c == '\n' || c == '\r') {
       if (idxCmd > 0) {
-        bufferCmd[idxCmd] = '\0';
-        processarComando(bufferCmd);
+        bufferComando[idxCmd] = '\0';
+        processarComando(bufferComando);
         idxCmd = 0;
       }
-    } else {
-      if (idxCmd < sizeof(bufferCmd) - 1) {
-        bufferCmd[idxCmd++] = c;
+    } else if (idxCmd < sizeof(bufferComando) - 1) {
+      bufferComando[idxCmd++] = c;
+    }
+  }
+
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (idxCmd > 0) {
+        bufferComando[idxCmd] = '\0';
+        processarComando(bufferComando);
+        idxCmd = 0;
+      }
+    } else if (idxCmd < sizeof(bufferComando) - 1) {
+      bufferComando[idxCmd++] = c;
+    }
+  }
+
+  // --- 2. ATUALIZAÇÃO PERIÓDICA DOS SENSORES E CONTROLE DA BOMBA ---
+  if (tempoAtual - ultimoTempoLeitura >= intervaloLeitura) {
+    ultimoTempoLeitura = tempoAtual;
+
+    int leituraSoloPura = analogRead(PIN_SOLO);
+    porcentagemSolo = map(leituraSoloPura, LIMITE_SECO, LIMITE_MOLHADO, 0, 100);
+    porcentagemSolo = constrain(porcentagemSolo, 0, 100); 
+
+    float t = dht.readTemperature();
+    float h = dht.readHumidity();
+    if (!isnan(t)) tempAr = t;
+    if (!isnan(h)) humAr = h;
+
+    // Se o usuário acionou a bomba manualmente pelo App, respeita o tempo manual
+    if (controleManualBomba) {
+      if (tempoAtual > tempoFimManualBomba) {
+        controleManualBomba = false; // Retorna para controle automático após timeout
+      }
+    }
+
+    // Controle Automático da Bomba (se não estiver em modo manual do app)
+    if (!controleManualBomba) {
+      if (porcentagemSolo < UMIDADE_LIGAR_REGA) {
+        digitalWrite(PIN_RELE, LOW); // Liga a bomba (Active-Low)
+        bombaLigada = true;
+      } else {
+        digitalWrite(PIN_RELE, HIGH); // Desliga a bomba
+        bombaLigada = false;
       }
     }
   }
 
-  // 2. Envio periódico da telemetria e atualização da tela LCD
-  unsigned long agora = millis();
-  if (agora - ultimoEnvio >= INTERVALO_ENVIO) {
-    ultimoEnvio = agora;
-    enviarTelemetria();
+  // --- 3. ENVIO DE TELEMETRIA VIA BLUETOOTH PARA O CELULAR (a cada 1.5s) ---
+  if (tempoAtual - ultimoEnvioBT >= intervaloEnvioBT) {
+    ultimoEnvioBT = tempoAtual;
+    enviarTelemetriaBluetooth();
+  }
+
+  // --- 4. ALTERNÂNCIA DE TELAS NO DISPLAY LCD (a cada 3s) ---
+  if (tempoAtual - ultimaTrocaTela >= tempoExibicaoTela) {
+    ultimaTrocaTela = tempoAtual;
+    telaAtual = (telaAtual == 1) ? 2 : 1;
+    lcd.clear();
+  }
+
+  // --- 5. EXIBIÇÃO NO LCD 16x2 COM ÍCONES DO USUÁRIO ---
+  if (telaAtual == 1) {
+    // Tela 1: Ambiente (Temperatura + Umidade do Ar com Ícone)
+    lcd.setCursor(0, 0);
+    lcd.print(F("Ambiente:"));
+    
+    lcd.setCursor(0, 1);
+    lcd.write(byte(0)); // Ícone do Termômetro
+    lcd.print((int)tempAr);
+    lcd.print(F("C  "));
+    
+    lcd.print(F("Ar:"));
+    lcd.print((int)humAr);
+    lcd.print(F("%"));
+
+  } else {
+    // Tela 2: Umidade do Solo (com Ícone de Gota) + Status da Bomba (T:ON/OFF)
+    lcd.setCursor(0, 0);
+    lcd.print(F("Umidade Solo:"));
+    
+    lcd.setCursor(0, 1);
+    lcd.write(byte(1)); // Ícone da Gotinha
+    lcd.print(porcentagemSolo);
+    lcd.print(F("% "));
+
+    if (porcentagemSolo < UMIDADE_LIGAR_REGA) {
+      lcd.print(F("Seco"));
+    } else {
+      lcd.print(F("Umido"));
+    }
+
+    lcd.setCursor(11, 1);
+    if (bombaLigada) {
+      lcd.print(F("T:ON "));
+    } else {
+      lcd.print(F("T:OFF"));
+    }
   }
 }

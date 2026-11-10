@@ -6,11 +6,9 @@
   <meta name="theme-color" content="#0a0e17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Estufa Inteligente - Monitoramento & Controle IoT (MQTT)</title>
+  <title>Estufa Inteligente - Monitoramento & Controle Bluetooth</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
-  <!-- MQTT.js via CDN (WebSocket Seguro) -->
-  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
 </head>
 <body>
   <!-- Cabeçalho Fixo -->
@@ -35,15 +33,15 @@
       </div>
 
       <div class="header-actions">
-        <!-- Botão de Solicitação de Leitura Imediata -->
-        <button class="icon-btn" id="refreshBtn" title="Solicitar dados via MQTT" aria-label="Atualizar agora">
-          <svg id="refreshIcon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+        <!-- Botão Rápido de Bluetooth -->
+        <button class="icon-btn" id="headerBtBtn" title="Conectar / Desconectar Bluetooth" aria-label="Bluetooth">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
           </svg>
         </button>
 
         <!-- Botão de Configurações -->
-        <button class="icon-btn" id="openSettingsBtn" title="Configurações MQTT" aria-label="Abrir Configurações">
+        <button class="icon-btn" id="openSettingsBtn" title="Configurações e Modos" aria-label="Abrir Configurações">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -61,13 +59,34 @@
         <line x1="12" y1="8" x2="12" y2="12"></line>
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
-      <span id="bannerMessage">Não conectado ao Broker MQTT. Verifique as configurações ou ative o Modo Simulação.</span>
+      <span id="bannerMessage">Bluetooth desconectado. Aproxime-se da estufa e conecte para atualizar os dados.</span>
     </div>
-    <button class="banner-action-btn" id="bannerConfigBtn">Configurar</button>
+    <button class="banner-action-btn" id="bannerConfigBtn">Conectar</button>
   </div>
 
   <main class="main-content">
-    <!-- Meta Info: Última telemetria, Tópico e Broker -->
+    <!-- Card Destaque: Botão de Conexão Bluetooth -->
+    <div class="bluetooth-action-card" id="btActionCard">
+      <div class="bt-card-content">
+        <div class="bt-card-icon" id="btIconWrapper">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+          </svg>
+        </div>
+        <div class="bt-card-text">
+          <strong id="btCardTitle">Bluetooth Desconectado</strong>
+          <span id="btCardSubtitle">Toque para parear e conectar com o seu Arduino</span>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-bt" id="connectBtBtn">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+        </svg>
+        <span id="btBtnText">Conectar Bluetooth</span>
+      </button>
+    </div>
+
+    <!-- Meta Info: Última telemetria e Dispositivo -->
     <section class="meta-bar">
       <div class="meta-item">
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -78,10 +97,9 @@
       </div>
       <div class="meta-item">
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-          <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
         </svg>
-        <span>Estufa: <strong id="currentDeviceCodeText">ESTUFA-A1B2</strong></span>
+        <span>Dispositivo: <strong id="currentDeviceCodeText">HC-05 / Arduino</strong></span>
       </div>
     </section>
 
@@ -90,9 +108,9 @@
       <div class="section-header">
         <h2 class="section-title">
           <span class="section-bullet green"></span>
-          Sensores em Tempo Real (MQTT)
+          Sensores em Tempo Real
         </h2>
-        <span class="live-pill" id="livePill">MQTT ONLINE</span>
+        <span class="live-pill" id="livePill">AO VIVO</span>
       </div>
 
       <div class="cards-grid">
@@ -116,7 +134,7 @@
           </div>
 
           <div class="card-footer">
-            <span class="badge" id="badgeTemp">Aguardando telemetria...</span>
+            <span class="badge" id="badgeTemp">Aguardando leitura...</span>
           </div>
         </div>
 
@@ -140,7 +158,7 @@
           </div>
 
           <div class="card-footer">
-            <span class="badge" id="badgeHumAir">Aguardando telemetria...</span>
+            <span class="badge" id="badgeHumAir">Aguardando leitura...</span>
           </div>
         </div>
 
@@ -174,8 +192,8 @@
             </div>
             <div class="progress-scale">
               <span>0% (Seco)</span>
-              <span>50% (Ideal)</span>
-              <span>100% (Saturado)</span>
+              <span>30% (Irrigar)</span>
+              <span>100% (Úmido)</span>
             </div>
           </div>
         </div>
@@ -198,19 +216,18 @@
             <div class="water-info">
               <span class="sensor-label">Nível de Água</span>
               <div class="water-state-display" id="waterLevelContainer">
-                <span class="water-icon-indicator" id="waterIconIndicator">
-                  <svg id="waterIconSvg" viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.2" fill="none">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 14 14"></polyline>
+                <span class="water-icon-indicator ok" id="waterIconIndicator">
+                  <svg id="waterIconSvg" viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none">
+                    <polyline points="20 6 9 17 4 12"></polyline>
                   </svg>
                 </span>
                 <div>
-                  <span class="water-state-title" id="valWater">Aguardando</span>
-                  <span class="water-state-subtitle" id="waterSubText">Verificando boia...</span>
+                  <span class="water-state-title" id="valWater">Nível Normal</span>
+                  <span class="water-state-subtitle" id="waterSubText">Reservatório abastecido</span>
                 </div>
               </div>
             </div>
-            <div class="water-visual-tank" id="waterTankVisual" aria-hidden="true">
+            <div class="water-visual-tank ok" id="waterTankVisual" aria-hidden="true">
               <div class="water-tank-liquid" id="waterTankLiquid"></div>
             </div>
           </div>
@@ -218,12 +235,12 @@
       </div>
     </section>
 
-    <!-- Seção 2: Painel de Controle (Atuadores via MQTT Publish) -->
+    <!-- Seção 2: Painel de Controle (Atuadores via Bluetooth) -->
     <section class="section-container">
       <div class="section-header">
         <h2 class="section-title">
           <span class="section-bullet purple"></span>
-          Controle Remoto de Atuadores
+          Controle de Atuadores
         </h2>
         <span class="actuators-count" id="activeActuatorsCount">0 ativos</span>
       </div>
@@ -247,9 +264,9 @@
                 <span class="actuator-title">Bomba de Água</span>
                 <span class="actuator-state-label" id="pumpStateLabel">DESLIGADA</span>
               </div>
-              <span class="actuator-description">Irrigação remota via nuvem</span>
+              <span class="actuator-description">Pino 10 (Controle Automático & Manual)</span>
               <span class="actuator-warning hidden" id="pumpWaterWarning">
-                ⚠️ Nível crítico: Evite acionar a bomba com o reservatório vazio!
+                ⚠️ Nível crítico: Evite acionar a bomba seca!
               </span>
             </div>
           </div>
@@ -276,7 +293,7 @@
                 <span class="actuator-title">Ventoinha (Cooler)</span>
                 <span class="actuator-state-label" id="fanStateLabel">DESLIGADA</span>
               </div>
-              <span class="actuator-description">Circulação e resfriamento térmico</span>
+              <span class="actuator-description">Pino 8 (Preparado para instalação)</span>
             </div>
           </div>
 
@@ -290,70 +307,49 @@
       </div>
     </section>
 
-    <!-- Dica de Conexão Nuvem -->
+    <!-- Dica de Conexão Bluetooth -->
     <div class="quick-info-box">
-      <div class="quick-info-icon">☁️</div>
+      <div class="quick-info-icon">📡</div>
       <p>
-        <strong>Conexão MQTT na Nuvem ativa:</strong> Você pode monitorar e controlar a estufa em tempo real de qualquer lugar, mesmo usando redes móveis 4G/5G.
+        <strong>Conexão Bluetooth ativa:</strong> Mantenha o Bluetooth do celular ligado a uma distância de até 10 a 15 metros da estufa para monitorar e controlar.
       </p>
     </div>
   </main>
 
-  <!-- Modal de Configurações MQTT -->
+  <!-- Modal de Configurações Bluetooth -->
   <div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-card">
       <div class="modal-header">
         <div class="modal-title-box">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
           </svg>
-          <h3 id="modalTitle">Conectar Estufa Inteligente</h3>
+          <h3 id="modalTitle">Configurações & Conexão</h3>
         </div>
         <button class="modal-close-btn" id="closeSettingsBtn" aria-label="Fechar Modal">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="deviceCodeInput">Código do Dispositivo / ID da Estufa</label>
-          <div class="input-with-prefix">
-            <span class="input-prefix">ID:</span>
-            <input 
-              type="text" 
-              id="deviceCodeInput" 
-              placeholder="ESTUFA-A1B2" 
-              autocomplete="off"
-              spellcheck="false"
-              style="text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em;"
-            >
+          <label>Modo de Conexão com o Arduino</label>
+          <div class="connection-options-grid">
+            <button type="button" class="btn btn-secondary conn-choice-btn active" id="btnModeBle">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+              </svg>
+              Bluetooth (BLE / Celular)
+            </button>
+            <button type="button" class="btn btn-secondary conn-choice-btn" id="btnModeSerial">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+              </svg>
+              Serial / USB (PC ou Cabo)
+            </button>
           </div>
-          <small class="form-help">Digite o código configurado no Arduino/ESP da sua estufa (ex: <code>ESTUFA-A1B2</code>).</small>
-        </div>
-
-        <!-- Tópicos Automáticos (Informativo) -->
-        <div class="topic-preview-card">
-          <div class="topic-preview-header">
-            <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M4 11a9 9 0 0 1 9 9"></path>
-              <path d="M4 4a16 16 0 0 1 16 16"></path>
-              <circle cx="5" cy="19" r="1"></circle>
-            </svg>
-            <span>Tópicos MQTT configurados automaticamente:</span>
-          </div>
-          <div class="topic-preview-list">
-            <div class="topic-preview-item"><span class="topic-tag">Telemetria</span> <code id="previewTopicSensors">estufa/ESTUFA-A1B2/sensores</code></div>
-            <div class="topic-preview-item"><span class="topic-tag">Controle</span> <code id="previewTopicCommands">estufa/ESTUFA-A1B2/comandos</code></div>
-          </div>
-        </div>
-
-        <!-- Indicador de Persistência no LocalStorage -->
-        <div class="storage-indicator">
-          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-            <polyline points="17 21 17 13 7 13 7 21"></polyline>
-            <polyline points="7 3 7 8 15 8"></polyline>
-          </svg>
-          <span>O código é salvo automaticamente no <strong>localStorage</strong> para reconexão instantânea.</span>
+          <small class="form-help">No celular Android, use <strong>Bluetooth</strong> no Google Chrome. No computador, você pode conectar via Bluetooth pareado ou cabo USB.</small>
         </div>
 
         <!-- Modo Demonstração / Simulação -->
@@ -361,7 +357,7 @@
           <div class="sim-toggle-row">
             <div class="sim-toggle-text">
               <span class="sim-toggle-title">Modo Demonstração (Simulado)</span>
-              <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de conexão com o hardware físico.</p>
+              <p class="sim-toggle-desc">Gera dados locais para testar a interface sem necessidade do Arduino físico ligado.</p>
             </div>
             <div class="sim-switch-wrapper">
               <label class="switch" for="simulationToggle">
@@ -372,32 +368,26 @@
           </div>
         </div>
 
-        <!-- Diagnóstico / Status da Conexão MQTT -->
+        <!-- Diagnóstico / Status -->
         <div class="test-connection-section">
-          <button type="button" class="btn btn-secondary" id="reconnectBtn">
-            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-            </svg>
-            Reconectar Agora
-          </button>
           <span class="test-result-text" id="testResultText"></span>
         </div>
 
-        <!-- Opção de Limpar Dados / Esquecer Dispositivo -->
+        <!-- Opção de Limpar Dados -->
         <div class="reset-section">
-          <button type="button" class="btn-danger-outline" id="resetConfigBtn" title="Apagar dados e redefinir para o padrão">
+          <button type="button" class="btn-danger-outline" id="disconnectBtModalBtn">
             <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
             </svg>
-            Esquecer Dispositivo / Limpar Dados
+            Desconectar Dispositivo Atual
           </button>
         </div>
       </div>
 
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" id="cancelSettingsBtn">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="saveSettingsBtn">Salvar Alterações</button>
+        <button type="button" class="btn btn-secondary" id="cancelSettingsBtn">Fechar</button>
+        <button type="button" class="btn btn-primary" id="saveSettingsBtn">Salvar</button>
       </div>
     </div>
   </div>

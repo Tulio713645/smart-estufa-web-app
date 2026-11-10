@@ -1,107 +1,79 @@
-# 🌱 Estufa Inteligente IoT - Conexão por Código da Estufa & Adaptador Wi-Fi
+# 🌱 Estufa Inteligente - Monitoramento & Controle via Bluetooth
 
-Aplicação Web moderna, *mobile-first*, com visual *dark mode* elegante e sistema de pareamento simplificado por **Código da Estufa** (`DEVICE_ID`) na Nuvem MQTT (HiveMQ).
+Aplicação Web moderna, *mobile-first*, com visual *dark mode* elegante para monitoramento e controle da estufa inteligente através de **Bluetooth (HC-05 / HC-06 / HM-10)** diretamente pelo navegador Google Chrome (sem precisar instalar nenhum aplicativo da Play Store!).
 
 ---
 
-## 🏗️ Arquitetura do Sistema (Arduino Uno + Adaptador Wi-Fi ESP-01)
-
-A estufa utiliza o **Arduino Uno** como microcontrolador principal de sensores/relés e o módulo **ESP-01** como adaptador de rede Wi-Fi e cliente MQTT:
+## 🏗️ Arquitetura do Sistema (Arduino Uno + Bluetooth)
 
 ```text
 [Sensores & Relés]
         │
         ▼
- [Arduino Uno]  (RAM 2KB otimizada via macros F())
+ [Arduino Uno] (DHT11 pino 6, Relé pino 10, Solo A0, LCD 16x2 I2C 0x27)
         │
-        │ Serial 9600 baud (Pinos 2 e 3 SoftwareSerial)
+        │ Serial 9600 baud (Pinos 2 e 3 SoftwareSerial / Pinos 0 e 1 Serial USB)
         ▼
- [Adaptador Wi-Fi ESP-01]  (#define DEVICE_ID "ESTUFA-A1B2")
-        │
-        │ MQTT TCP porta 1883
-        ▼
- [Broker HiveMQ Cloud (broker.hivemq.com)]
+ [Módulo Bluetooth (HC-05 / HC-06 / HM-10)]
         ▲
-        │ WebSocket Seguro WSS porta 8884
+        │ Conexão Bluetooth sem fio (Alcance ~10-15 metros)
         │
- [App Web SPA no Celular / Navegador (GitHub Pages)]
-  (Conectado apenas digitando o código: ESTUFA-A1B2)
+ [App Web SPA no Celular / PC (Google Chrome)]
+  (Conexão direta pelo botão "Conectar Bluetooth")
 ```
 
 ---
 
-## 🔑 Pareamento Simples por "Código da Estufa"
+## 🔌 Esquema de Ligação dos Pinos no Arduino Uno
 
-O usuário não precisa digitar URLs complexas de Broker ou nomes manuais de tópicos:
-
-1. No firmware da estufa, define-se o identificador:
-   ```cpp
-   #define DEVICE_ID "ESTUFA-A1B2"
-   ```
-2. No **App Web**, basta abrir o modal de configurações e inserir o código:
-   ```text
-   ESTUFA-A1B2
-   ```
-3. O aplicativo gera e se inscreve automaticamente nos tópicos:
-   * **Leitura de Sensores:** `estufa/ESTUFA-A1B2/sensores`
-   * **Controle de Atuadores:** `estufa/ESTUFA-A1B2/comandos`
-4. O código é salvo no `localStorage` do navegador para reconexão automática e transparente.
-
----
-
-## 🔌 Esquema de Ligação do Hardware
-
-### 1. Arduino Uno ➔ Adaptador ESP-01
-| Pino Arduino Uno | Pino ESP-01 | Observação |
+### 1. Arduino Uno ➔ Módulo Bluetooth
+| Pino Arduino Uno | Pino Módulo Bluetooth | Observação |
 | :--- | :--- | :--- |
-| **Pino 2 (Software RX)** | **TX (GPIO 1)** | Recepção direta de dados |
-| **Pino 3 (Software TX)** | **RX (GPIO 3)** | Envio (utilizar divisor 5V ➔ 3.3V com resistores 1k/2k) |
-| **GND** | **GND** | Terra comum |
-| **Fonte Externa 3.3V** | **VCC / CH_PD (EN)** | O ESP-01 requer ~300mA em picos de transmissão Wi-Fi |
+| **5V** | **VCC** | Alimentação do módulo |
+| **GND** | **GND** | Terra Comum |
+| **Pino Digital 2 (RX)** | **TX** | O Arduino recebe os comandos enviados pelo celular |
+| **Pino Digital 3 (TX)** | **RX** | O Arduino envia as leituras de telemetria |
+
+*(Dica: Se preferir ligar diretamente nos pinos 0 e 1 do Arduino, o código também envia e recebe na porta Serial nativa ao mesmo tempo!).*
 
 ### 2. Arduino Uno ➔ Display LCD 16x2 (I2C)
 | Pino Arduino Uno | Pino LCD I2C | Descrição |
 | :--- | :--- | :--- |
-| **Pino Analógico A4** | **SDA** | Linha de Dados I2C |
-| **Pino Analógico A5** | **SCL** | Linha de Clock I2C |
-| **5V** | **VCC** | Alimentação do Display |
-| **GND** | **GND** | Terra Comum |
+| **5V** | **VCC** | Alimentação |
+| **GND** | **GND** | Terra |
+| **Pino Analógico A4** | **SDA** | Dados I2C |
+| **Pino Analógico A5** | **SCL** | Clock I2C |
 
-### 3. Arduino Uno ➔ Sensores & Relés
+### 3. Arduino Uno ➔ Sensores & Relés (Pinos do seu Projeto)
 | Componente | Pino Arduino Uno | Descrição |
 | :--- | :--- | :--- |
-| **Sensor DHT11** | `Pino Digital 4` | Temperatura do Ar (°C) e Umidade do Ar (%) |
-| **Higrômetro de Solo** | `Pino Analógico A0` | Umidade do solo (0 a 100%) |
-| **Sensor Boia de Nível** | `Pino Digital 7` | Leitura digital (`INPUT_PULLUP`: LOW = OK, HIGH = Crítico) |
-| **Relé 1 (Bomba)** | `Pino Digital 5` | Acionamento da bomba de água (irrigação) |
-| **Relé 2 (Ventoinha)** | `Pino Digital 6` | Acionamento do cooler de circulação |
-| **LED Pareamento (Onboard)**| `Pino Digital 13` | Pisca 3 vezes ao parear e fica aceso |
+| **Sensor DHT11** | `Pino Digital 6` | Temperatura do Ar (°C) e Umidade do Ar (%) |
+| **Relé da Bomba de Água** | `Pino Digital 10` | Acionamento da bomba (Active-Low: LOW liga) |
+| **Higrômetro de Solo** | `Pino Analógico A0` | Leitura analógica da umidade do solo |
+| **Sensor Boia de Nível (Amanhã)** | `Pino Digital 7` | Entrada com pull-up para nível do reservatório |
+| **Relé da Ventoinha (Amanhã)** | `Pino Digital 8` | Controle do cooler térmico |
 
 ---
 
-## 📂 Arquivos do Projeto
+## 📱 Como Conectar no Aplicativo Web
+
+1. Abra o site no navegador Google Chrome do seu celular Android ou PC:  
+   👉 **[tulio713645.github.io/smart-estufa-web-app](https://tulio713645.github.io/smart-estufa-web-app/)**
+2. Ligue a sua estufa na tomada.
+3. No topo da página, clique no botão azul **"🔵 Conectar Bluetooth"**.
+4. O navegador abrirá a lista de dispositivos Bluetooth por perto.
+5. Selecione o seu módulo Bluetooth (ex: `HC-05`, `HC-06`, `BT-05`, `Estufa`, etc.) e toque em **Parear/Conectar**.
+6. Pronto! A página passará a exibir as leituras de temperatura, umidade do solo e do ar em tempo real e você poderá ligar e desligar a bomba pelo celular!
+
+---
+
+## 📂 Arquivos do Repositório
 
 ```text
 Interface Estufa/
-├── index.html           # SPA mobile-first com entrada simplificada de Código da Estufa
-├── style.css            # Folha de estilos dark mode elegante e responsiva
-├── app.js               # Conexão MQTT via WebSocket, tópicos dinâmicos e persistência
-├── estufa_hardware.ino  # Firmware para Arduino Uno (sensores, relés e serial com ESP-01)
-├── adaptador_esp01.ino  # Firmware para o Adaptador ESP-01 (Wi-Fi, MQTT e ponte serial)
-└── README.md            # Documentação completa
+├── index.html           # SPA moderna com suporte nativo a Bluetooth
+├── style.css            # Estilos dark mode com cards e animações
+├── app.js               # Conexão Web Bluetooth / Web Serial e parser JSON
+├── estufa_hardware.ino  # Código completo do Arduino Uno adaptado com Bluetooth
+└── README.md            # Documentação e esquema de ligação
 ```
-
----
-
-## 📦 Como Subir o Código nas Placas
-
-1. **Gravar o ESP-01 (`adaptador_esp01.ino`)**:
-   * Use um adaptador USB-Serial para ESP-01 (ou o próprio Arduino Uno com reset aterrado).
-   * Altere `WIFI_SSID` e `WIFI_PASS` com a rede da sua casa.
-   * Certifique-se de que a placa selecionada na Arduino IDE é **Generic ESP8266 Module**.
-2. **Gravar o Arduino Uno (`estufa_hardware.ino`)**:
-   * Selecione a placa **Arduino Uno** e a porta COM correspondente.
-   * Faça o upload do código normalmente via cabo USB.
-3. **Acessar a Aplicação Web**:
-   * Acesse [tulio713645.github.io/smart-estufa-web-app](https://tulio713645.github.io/smart-estufa-web-app/).
-   * Digite `ESTUFA-A1B2` e clique em **Salvar Alterações**.
