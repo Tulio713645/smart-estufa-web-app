@@ -342,14 +342,16 @@
         <!-- Modo Demonstração / Simulação -->
         <div class="form-group simulation-group">
           <div class="sim-toggle-row">
-            <div>
+            <div class="sim-toggle-text">
               <span class="sim-toggle-title">Modo Demonstração (Simulado)</span>
               <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de hardware físico conectado.</p>
             </div>
-            <label class="switch" for="simulationToggle">
-              <input type="checkbox" id="simulationToggle" aria-label="Ativar modo simulação">
-              <span class="slider round"></span>
-            </label>
+            <div class="sim-switch-wrapper">
+              <label class="switch" for="simulationToggle">
+                <input type="checkbox" id="simulationToggle" aria-label="Ativar modo simulação">
+                <span class="slider round"></span>
+              </label>
+            </div>
           </div>
         </div>
 

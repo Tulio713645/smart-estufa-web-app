@@ -794,7 +794,10 @@ body {
   position: relative;
   display: inline-block;
   width: 54px;
+  min-width: 54px;
   height: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
 }
 
 .switch input {
@@ -1065,16 +1068,29 @@ input:checked + .slider:before {
   gap: 1rem;
 }
 
+.sim-toggle-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.sim-switch-wrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
 .sim-toggle-title {
   font-size: 0.875rem;
   font-weight: 700;
   color: #ffffff;
+  display: block;
 }
 
 .sim-toggle-desc {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: 2px;
+  line-height: 1.35;
 }
 
 /* Seção de Teste de Conexão */
