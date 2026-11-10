@@ -1,123 +1,106 @@
-# 🌱 Estufa Inteligente - Single Page Application (SPA)
+# 🌱 Estufa Inteligente IoT - Nuvem MQTT (SPA Mobile-First)
 
-Aplicação Web moderna, mobile-first, com design dark mode elegante para monitoramento de sensores em tempo real e controle de atuadores de uma estufa inteligente baseada em microcontroladores **ESP32** ou **ESP8266 / Arduino**.
-
----
-
-## 📱 Recursos Principais da Interface
-
-1. **Mobile-First & Dark Mode Elegante**:
-   - Layout fluido otimizado para celulares e adaptável a telas maiores.
-   - Paleta escura suave de alto contraste com efeito glassmorphism e iluminação sutil.
-   - Ícones vetoriais inline integrados (100% autossuficiente e funciona até sem conexão com a internet).
-
-2. **Cabeçalho Fixo com Status em Tempo Real**:
-   - Indicador visual dinâmico com animação de pulso:
-     - 🟢 **Conectado** (comunicação ativa com o microcontrolador).
-     - 🔴 **Desconectado** (indica perda de sinal ou host inacessível).
-     - 🟡 **Simulado** (Modo Demonstração ativo).
-   - Botão de engrenagem para abrir o **Modal de Configurações**.
-   - Botão de recarregamento rápido instantâneo.
-
-3. **Cards de Sensores**:
-   - 🌡️ **Temperatura do Ar (°C)**: Leitura do sensor DHT11 com indicação de faixas de conforto.
-   - 💧 **Umidade do Ar (%)**: Leitura do DHT11 com alertas de ar seco ou saturado.
-   - 🌿 **Umidade do Solo (%)**: Higrômetro analógico com **Barra de Progresso Dinâmica** (Seco < 30% em vermelho, Ideal 30-70% em esmeralda, Saturado > 70% em azul).
-   - 🚰 **Nível de Água do Reservatório**: Boia/sensor de nível com alerta visual pulsante de nível crítico e representação visual gráfica do reservatório.
-
-4. **Painel de Atuadores (Controles Manuais)**:
-   - 🚿 **Bomba de Água (Irrigação)**: Botão switch tipo iOS com alerta de segurança se o nível de água estiver crítico (evitando queimar a bomba seca).
-   - 🌀 **Ventoinha (Cooler)**: Botão switch com **animação de rotação contínua e suave** do ícone da hélice quando ligada.
-   - Contador de atuadores ativos em tempo real.
-
-5. **Modal de Configurações & Persistência Local**:
-   - Campo para digitar o **Endereço IP** ou nome mDNS (ex: `192.168.1.150` ou `estufa.local`).
-   - Salvo automaticamente no `localStorage` do navegador.
-   - Frequência de polling ajustável (1.5s, 2.5s, 4s, 6s).
-   - Botão **"Testar Conexão Agora"** para diagnóstico instantâneo.
-   - **Modo Demonstração (Simulado)**: Permite testar todos os botões, animações e gráficos localmente sem necessidade do hardware físico ligado.
+Aplicação Web moderna, *mobile-first*, com visual *dark mode* elegante para monitoramento e controle remoto da estufa inteligente de qualquer lugar do mundo via **MQTT na Nuvem (HiveMQ)**.
 
 ---
 
-## 📂 Estrutura de Arquivos
+## ☁️ Arquitetura de Comunicação IoT (MQTT)
+
+A comunicação foi migrada de HTTP local para **MQTT em Nuvem**:
+
+```text
+[ESP32 / Microcontrolador] 
+     │ (MQTT nativo TCP porta 1883)
+     ▼
+[Broker Público HiveMQ Cloud]
+     ▲
+     │ (WebSocket Seguro WSS porta 8884)
+[App Web no Celular / Navegador (GitHub Pages)]
+```
+
+* **Acesso Global**: Não requer estar na mesma rede Wi-Fi! Funciona via 4G/5G, Wi-Fi de outra casa ou trabalho.
+* **Tempo Real Instantâneo**: Ao clicar para ligar a bomba ou ventoinha no app, o comando é publicado e o relé é acionado em milissegundos.
+* **Mensagens Retidas (Retain)**: O ESP32 publica as leituras com a flag *retain*, permitindo que o aplicativo receba o status imediatamente ao abrir, sem aguardar o próximo ciclo.
+
+---
+
+## 📡 Tópicos MQTT Padronizados
+
+* **Telemetria dos Sensores (ESP32 ➔ Web App)**:
+  `estufa/Tulio/sensores`
+  *Payload JSON recebido:*
+  ```json
+  {
+    "temp": 25.5,
+    "umidade_ar": 60,
+    "umidade_solo": 45,
+    "nivel_agua": "OK",
+    "bomba": 0,
+    "ventoinha": 0
+  }
+  ```
+
+* **Comandos de Atuadores (Web App ➔ ESP32)**:
+  `estufa/Tulio/comandos`
+  *Exemplos de comando:*
+  ```json
+  { "comando": "bomba_toggle" }
+  { "comando": "ventoinha_toggle" }
+  { "comando": "status" }
+  ```
+
+---
+
+## 📱 Recursos da Interface Web
+
+1. **Cabeçalho com Status MQTT**:
+   * 🟢 **Conectado (MQTT)** – conectado ao Broker na nuvem.
+   * 🟡 **Reconectando...** – tentando restabelecer conexão.
+   * 🔴 **Desconectado** – falha ou offline.
+   * 🟢 **Simulado** – Modo Demonstração ativo.
+
+2. **Cards Visuais dos Sensores**:
+   * 🌡️ **Temperatura do Ar (°C)**: DHT11 com indicação de faixas de conforto.
+   * 💧 **Umidade do Ar (%)**: DHT11 com avisos de ar seco/ideal.
+   * 🌿 **Umidade do Solo (%)**: Higrômetro analógico com **Barra de Progresso Dinâmica** (Seco < 30% em vermelho, Ideal 30-70% em esmeralda, Saturado > 70% em azul).
+   * 🚰 **Nível de Água do Reservatório**: Boia/sensor com alerta visual de nível crítico e gráfico de volume do reservatório.
+
+3. **Controle Remoto de Atuadores**:
+   * 🚿 **Bomba de Água**: Botão switch iOS com bloqueio de segurança se a água estiver crítica.
+   * 🌀 **Ventoinha (Cooler)**: Botão switch iOS com **animação de rotação contínua da hélice** quando ligada.
+
+4. **Modal de Configurações**:
+   * Ajuste do Broker WebSocket (padrão: `wss://broker.hivemq.com:8884/mqtt`).
+   * Ajuste do Tópico Base (padrão: `estufa/Tulio`).
+   * Botão **Reconectar ao Broker**.
+   * **Modo Demonstração (Simulado)**: Permite testar todos os cards, toggles e gráficos sem placa física conectada.
+
+---
+
+## 📂 Arquivos do Repositório
 
 ```text
 Interface Estufa/
-├── index.html        # Estrutura semântica HTML5 da SPA e modais
-├── style.css         # Folha de estilos moderna dark mode, animações e responsividade
-├── app.js            # Lógica da aplicação, polling periódico, fetch e localStorage
-├── arduino_guia.ino  # Código C++ para ESP32 e ESP8266 com WebServer REST e CORS
-└── README.md         # Documentação completa de uso e montagem
+├── index.html           # SPA com suporte a MQTT.js via WebSocket Seguro (WSS)
+├── style.css            # Estilos dark mode, switches proporcionais e animações
+├── app.js               # Conexão MQTT.js, subscrição, publicação e modo simulação
+├── estufa_hardware.ino  # Código ESP32 com PubSubClient, Wi-Fi e controle dos relés
+└── README.md            # Documentação completa
 ```
 
 ---
 
-## 🚀 Como Executar a Aplicação Web
+## 🔌 Pinagem no ESP32 (`estufa_hardware.ino`)
 
-Como o projeto foi desenvolvido em **HTML5, CSS3 e JavaScript moderno puro**, ele **não requer Node.js nem compilação prévia**:
-
-1. **Abrir diretamente**:
-   - Dê um duplo clique no arquivo [`index.html`](file:///c:/Users/tulio/Documents/Túlio/Interface%20Estufa/index.html) para abrir no seu navegador preferido (Chrome, Edge, Firefox, Safari).
-2. **No Celular**:
-   - Para abrir no celular, você pode compartilhar a pasta via rede local, usar a extensão **Live Server** do VS Code, ou colocar os arquivos `index.html`, `style.css` e `app.js` em qualquer servidor web estático (GitHub Pages, Netlify, etc.) ou até mesmo servir diretamente da memória flash SPIFFS/LittleFS do ESP!
-
----
-
-## 🔌 Integração com o Arduino / ESP (`arduino_guia.ino`)
-
-O arquivo [`arduino_guia.ino`](file:///c:/Users/tulio/Documents/Túlio/Interface%20Estufa/arduino_guia.ino) já está pronto para uso e suporta tanto **ESP32** quanto **ESP8266**.
-
-### 1. Esquema de Pinos Recomendado
-
-| Componente | Pino no ESP32 | Pino no ESP8266 (NodeMCU) |
+| Componente | Pino ESP32 | Descrição |
 | :--- | :--- | :--- |
-| **Sensor DHT11 (Dados)** | `GPIO 4` | `D4` (`GPIO 2`) |
-| **Higrômetro de Solo (Analógico)** | `GPIO 34` | `A0` |
-| **Sensor de Nível / Boia (Digital)** | `GPIO 18` | `D7` (`GPIO 13`) |
-| **Relé 1 - Bomba de Água** | `GPIO 26` | `D1` (`GPIO 5`) |
-| **Relé 2 - Ventoinha / Cooler** | `GPIO 27` | `D2` (`GPIO 4`) |
+| **Sensor DHT11** | `GPIO 4` | Leitura digital de temperatura e umidade |
+| **Higrômetro de Solo** | `GPIO 34` | Leitura analógica (ADC1) mapeada em % |
+| **Boia de Nível** | `GPIO 18` | Entrada com pull-up interno (`INPUT_PULLUP`) |
+| **Relé da Bomba** | `GPIO 26` | Acionamento da bomba de irrigação |
+| **Relé da Ventoinha** | `GPIO 27` | Acionamento do cooler / circulação |
 
-### 2. Formato da API REST
-
-A aplicação se comunica através dos seguintes endpoints:
-
-#### `GET /dados`
-Retorna as leituras e o estado dos relés:
-```json
-{
-  "temp": 25.5,
-  "umidade_ar": 60,
-  "umidade_solo": 45,
-  "nivel_agua": "OK",
-  "bomba": 0,
-  "ventoinha": 0
-}
-```
-
-#### `POST /bomba/toggle` (ou `GET /bomba/toggle`)
-Inverte o estado do relé da bomba e retorna o JSON atualizado.
-
-#### `POST /ventoinha/toggle` (ou `GET /ventoinha/toggle`)
-Inverte o estado do relé da ventoinha e retorna o JSON atualizado.
-
-### 3. Cabeçalhos CORS
-O código C++ no microcontrolador inclui os cabeçalhos:
-```cpp
-server.sendHeader("Access-Control-Allow-Origin", "*");
-server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-server.sendHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-```
-Isso garante que o navegador permita a comunicação sem bloqueios de segurança entre origens diferentes.
-
----
-
-## 🧪 Como Testar Imediatamente (Sem Placa Conectada)
-
-1. Abra o arquivo `index.html` no seu navegador.
-2. Clique no ícone de **engrenagem (⚙️)** no topo direito.
-3. Ative o interruptor **"Modo Demonstração (Simulado)"** e clique em **Salvar Alterações**.
-4. O status mudará para verde ("SIMULADO") e você poderá testar:
-   - As variações em tempo real de temperatura e umidade.
-   - O funcionamento dos toggles da **Bomba** e da **Ventoinha**.
-   - A rotação animada do cooler.
-   - A barra de progresso da umidade do solo reagindo à irrigação!
+### Bibliotecas necessárias na Arduino IDE:
+1. `PubSubClient` (por Nick O'Leary)
+2. `DHT sensor library` (por Adafruit)
+3. `Adafruit Unified Sensor` (por Adafruit)

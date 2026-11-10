@@ -6,9 +6,11 @@
   <meta name="theme-color" content="#0a0e17">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>Estufa Inteligente - Monitoramento & Controle</title>
+  <title>Estufa Inteligente - Monitoramento & Controle IoT (MQTT)</title>
   <link rel="stylesheet" href="style.css">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
+  <!-- MQTT.js via CDN (WebSocket Seguro) -->
+  <script src="https://unpkg.com/mqtt@5.3.5/dist/mqtt.min.js"></script>
 </head>
 <body>
   <!-- Cabeçalho Fixo -->
@@ -33,15 +35,15 @@
       </div>
 
       <div class="header-actions">
-        <!-- Botão de Atualização Rápida -->
-        <button class="icon-btn" id="refreshBtn" title="Atualizar agora" aria-label="Atualizar agora">
+        <!-- Botão de Solicitação de Leitura Imediata -->
+        <button class="icon-btn" id="refreshBtn" title="Solicitar dados via MQTT" aria-label="Atualizar agora">
           <svg id="refreshIcon" viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
           </svg>
         </button>
 
         <!-- Botão de Configurações -->
-        <button class="icon-btn" id="openSettingsBtn" title="Configurações da Estufa" aria-label="Abrir Configurações">
+        <button class="icon-btn" id="openSettingsBtn" title="Configurações MQTT" aria-label="Abrir Configurações">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"></circle>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -59,29 +61,28 @@
         <line x1="12" y1="8" x2="12" y2="12"></line>
         <line x1="12" y1="16" x2="12.01" y2="16"></line>
       </svg>
-      <span id="bannerMessage">Não foi possível conectar ao IP configurado. Verifique a rede ou ative o Modo Simulação.</span>
+      <span id="bannerMessage">Não conectado ao Broker MQTT. Verifique as configurações ou ative o Modo Simulação.</span>
     </div>
     <button class="banner-action-btn" id="bannerConfigBtn">Configurar</button>
   </div>
 
   <main class="main-content">
-    <!-- Meta Info: Última sincronização e IP ativo -->
+    <!-- Meta Info: Última telemetria, Tópico e Broker -->
     <section class="meta-bar">
       <div class="meta-item">
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="10"></circle>
           <polyline points="12 6 12 12 16 14"></polyline>
         </svg>
-        <span>Atualizado: <strong id="lastUpdatedText">Nunca</strong></span>
+        <span>Recebido: <strong id="lastUpdatedText">Aguardando dados...</strong></span>
       </div>
       <div class="meta-item">
         <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-          <line x1="6" y1="6" x2="6.01" y2="6"></line>
-          <line x1="6" y1="18" x2="6.01" y2="18"></line>
+          <path d="M4 11a9 9 0 0 1 9 9"></path>
+          <path d="M4 4a16 16 0 0 1 16 16"></path>
+          <circle cx="5" cy="19" r="1"></circle>
         </svg>
-        <span>Host: <strong id="currentHostText">192.168.4.1</strong></span>
+        <span>Tópico: <strong id="currentTopicText">estufa/Tulio/sensores</strong></span>
       </div>
     </section>
 
@@ -90,9 +91,9 @@
       <div class="section-header">
         <h2 class="section-title">
           <span class="section-bullet green"></span>
-          Sensores em Tempo Real
+          Sensores em Tempo Real (MQTT)
         </h2>
-        <span class="live-pill">AO VIVO</span>
+        <span class="live-pill" id="livePill">MQTT ONLINE</span>
       </div>
 
       <div class="cards-grid">
@@ -116,7 +117,7 @@
           </div>
 
           <div class="card-footer">
-            <span class="badge" id="badgeTemp">Aguardando dados...</span>
+            <span class="badge" id="badgeTemp">Aguardando telemetria...</span>
           </div>
         </div>
 
@@ -140,7 +141,7 @@
           </div>
 
           <div class="card-footer">
-            <span class="badge" id="badgeHumAir">Aguardando dados...</span>
+            <span class="badge" id="badgeHumAir">Aguardando telemetria...</span>
           </div>
         </div>
 
@@ -218,12 +219,12 @@
       </div>
     </section>
 
-    <!-- Seção 2: Painel de Controle (Atuadores) -->
+    <!-- Seção 2: Painel de Controle (Atuadores via MQTT Publish) -->
     <section class="section-container">
       <div class="section-header">
         <h2 class="section-title">
           <span class="section-bullet purple"></span>
-          Controle de Atuadores
+          Controle Remoto de Atuadores
         </h2>
         <span class="actuators-count" id="activeActuatorsCount">0 ativos</span>
       </div>
@@ -247,9 +248,9 @@
                 <span class="actuator-title">Bomba de Água</span>
                 <span class="actuator-state-label" id="pumpStateLabel">DESLIGADA</span>
               </div>
-              <span class="actuator-description">Irrigação por gotejamento / solo</span>
+              <span class="actuator-description">Irrigação remota via nuvem</span>
               <span class="actuator-warning hidden" id="pumpWaterWarning">
-                ⚠️ Nível crítico: Evite queimar a bomba seca!
+                ⚠️ Nível crítico: Evite acionar a bomba com o reservatório vazio!
               </span>
             </div>
           </div>
@@ -276,7 +277,7 @@
                 <span class="actuator-title">Ventoinha (Cooler)</span>
                 <span class="actuator-state-label" id="fanStateLabel">DESLIGADA</span>
               </div>
-              <span class="actuator-description">Circulação de ar e controle térmico</span>
+              <span class="actuator-description">Circulação e resfriamento térmico</span>
             </div>
           </div>
 
@@ -290,53 +291,60 @@
       </div>
     </section>
 
-    <!-- Dica de Conexão Rápida -->
+    <!-- Dica de Conexão Nuvem -->
     <div class="quick-info-box">
-      <div class="quick-info-icon">💡</div>
+      <div class="quick-info-icon">☁️</div>
       <p>
-        Certifique-se de que este dispositivo está conectado na <strong>mesma rede Wi-Fi</strong> que o módulo Arduino/ESP ou no ponto de acesso gerado por ele.
+        <strong>Conexão MQTT na Nuvem ativa:</strong> Você pode monitorar e controlar a estufa em tempo real de qualquer lugar, mesmo usando redes móveis 4G/5G.
       </p>
     </div>
   </main>
 
-  <!-- Modal de Configurações -->
+  <!-- Modal de Configurações MQTT -->
   <div class="modal-backdrop hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-card">
       <div class="modal-header">
         <div class="modal-title-box">
           <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            <path d="M4 11a9 9 0 0 1 9 9"></path>
+            <path d="M4 4a16 16 0 0 1 16 16"></path>
+            <circle cx="5" cy="19" r="1"></circle>
           </svg>
-          <h3 id="modalTitle">Configurações de Rede</h3>
+          <h3 id="modalTitle">Configurações MQTT & Nuvem</h3>
         </div>
         <button class="modal-close-btn" id="closeSettingsBtn" aria-label="Fechar Modal">✕</button>
       </div>
 
       <div class="modal-body">
         <div class="form-group">
-          <label for="ipInput">Endereço IP ou Host da Estufa</label>
+          <label for="brokerInput">Broker MQTT (WebSocket Seguro WSS)</label>
           <div class="input-with-prefix">
-            <span class="input-prefix">http://</span>
             <input 
               type="text" 
-              id="ipInput" 
-              placeholder="ex: 192.168.1.150 ou 192.168.4.1" 
+              id="brokerInput" 
+              placeholder="wss://broker.hivemq.com:8884/mqtt" 
               autocomplete="off"
               spellcheck="false"
             >
           </div>
-          <small class="form-help">Digite o IP atribuído ao seu Arduino/ESP ou o mDNS (ex: <code>estufa.local</code>).</small>
+          <small class="form-help">Padrão público gratuito: <code>wss://broker.hivemq.com:8884/mqtt</code> (ou <code>wss://broker.emqx.io:8084/mqtt</code>).</small>
         </div>
 
         <div class="form-group">
-          <label for="intervalSelect">Frequência de Atualização (Polling)</label>
-          <select id="intervalSelect" class="form-select">
-            <option value="1500">1.5 segundos (Rápido)</option>
-            <option value="2500" selected>2.5 segundos (Recomendado)</option>
-            <option value="4000">4 segundos (Econômico)</option>
-            <option value="6000">6 segundos (Lento)</option>
-          </select>
+          <label for="topicInput">Tópico Base da Estufa</label>
+          <div class="input-with-prefix">
+            <input 
+              type="text" 
+              id="topicInput" 
+              placeholder="estufa/Tulio" 
+              autocomplete="off"
+              spellcheck="false"
+            >
+          </div>
+          <small class="form-help">
+            Sensores: <code id="previewTopicSensors">estufa/Tulio/sensores</code><br>
+            Comandos: <code id="previewTopicCommands">estufa/Tulio/comandos</code>
+          </small>
         </div>
 
         <!-- Modo Demonstração / Simulação -->
@@ -344,7 +352,7 @@
           <div class="sim-toggle-row">
             <div class="sim-toggle-text">
               <span class="sim-toggle-title">Modo Demonstração (Simulado)</span>
-              <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de hardware físico conectado.</p>
+              <p class="sim-toggle-desc">Gera dados e respostas locais sem necessidade de conexão com o broker MQTT ou placa física.</p>
             </div>
             <div class="sim-switch-wrapper">
               <label class="switch" for="simulationToggle">
@@ -355,13 +363,13 @@
           </div>
         </div>
 
-        <!-- Diagnóstico / Status da Conexão -->
+        <!-- Diagnóstico / Status da Conexão MQTT -->
         <div class="test-connection-section">
-          <button type="button" class="btn btn-secondary" id="testConnBtn">
+          <button type="button" class="btn btn-secondary" id="reconnectBtn">
             <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
-              <path d="M5 12h14M12 5l7 7-7 7"/>
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
             </svg>
-            Testar Conexão Agora
+            Reconectar ao Broker Agora
           </button>
           <span class="test-result-text" id="testResultText"></span>
         </div>

@@ -1016,9 +1016,13 @@ input:checked + .slider:before {
   background: transparent;
   border: none;
   outline: none;
-  padding: 0.75rem 0.85rem 0.75rem 0;
+  padding: 0.75rem 0.85rem;
   font-size: 0.95rem;
   color: #ffffff;
+}
+
+.input-prefix + input {
+  padding-left: 0;
 }
 
 .input-with-prefix input::placeholder {

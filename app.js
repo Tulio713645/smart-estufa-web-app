@@ -1,6 +1,6 @@
 /**
  * Estufa Inteligente - Single Page Application (SPA)
- * Gerenciamento de Estado, Polling, Comunicação com ESP32/ESP8266 e Modo Simulação
+ * Comunicação IoT via MQTT na Nuvem (WebSocket Seguro WSS) + Modo Simulação
  */
 
 (function () {
@@ -8,31 +8,30 @@
 
   // Chaves de armazenamento no localStorage
   const STORAGE_KEYS = {
-    IP: 'greenhouse_ip',
-    INTERVAL: 'greenhouse_polling_interval',
+    BROKER: 'greenhouse_mqtt_broker',
+    TOPIC_BASE: 'greenhouse_mqtt_topic',
     SIMULATION: 'greenhouse_simulation_mode'
   };
 
   // Configurações padrão
   const DEFAULT_CONFIG = {
-    ip: '192.168.4.1',
-    interval: 2500, // milissegundos
+    broker: 'wss://broker.hivemq.com:8884/mqtt',
+    topicBase: 'estufa/Tulio',
     simulation: false
   };
 
   // Estado da aplicação
   const state = {
     config: {
-      ip: localStorage.getItem(STORAGE_KEYS.IP) || DEFAULT_CONFIG.ip,
-      interval: parseInt(localStorage.getItem(STORAGE_KEYS.INTERVAL), 10) || DEFAULT_CONFIG.interval,
+      broker: localStorage.getItem(STORAGE_KEYS.BROKER) || DEFAULT_CONFIG.broker,
+      topicBase: localStorage.getItem(STORAGE_KEYS.TOPIC_BASE) || DEFAULT_CONFIG.topicBase,
       simulation: localStorage.getItem(STORAGE_KEYS.SIMULATION) === 'true'
     },
+    mqttClient: null,
     connected: false,
-    consecutiveFailures: 0,
-    pollingTimer: null,
-    isRequestInProgress: false,
     lastData: null,
     lastUpdated: null,
+    simTimer: null,
     
     // Estado local para o Modo Simulação
     simulatedState: {
@@ -58,7 +57,8 @@
     bannerMessage: document.getElementById('bannerMessage'),
     bannerConfigBtn: document.getElementById('bannerConfigBtn'),
     lastUpdatedText: document.getElementById('lastUpdatedText'),
-    currentHostText: document.getElementById('currentHostText'),
+    currentTopicText: document.getElementById('currentTopicText'),
+    livePill: document.getElementById('livePill'),
 
     // Sensores
     valTemp: document.getElementById('valTemp'),
@@ -92,10 +92,12 @@
     closeSettingsBtn: document.getElementById('closeSettingsBtn'),
     cancelSettingsBtn: document.getElementById('cancelSettingsBtn'),
     saveSettingsBtn: document.getElementById('saveSettingsBtn'),
-    ipInput: document.getElementById('ipInput'),
-    intervalSelect: document.getElementById('intervalSelect'),
+    brokerInput: document.getElementById('brokerInput'),
+    topicInput: document.getElementById('topicInput'),
+    previewTopicSensors: document.getElementById('previewTopicSensors'),
+    previewTopicCommands: document.getElementById('previewTopicCommands'),
     simulationToggle: document.getElementById('simulationToggle'),
-    testConnBtn: document.getElementById('testConnBtn'),
+    reconnectBtn: document.getElementById('reconnectBtn'),
     testResultText: document.getElementById('testResultText'),
 
     // Toast
@@ -103,22 +105,14 @@
   };
 
   /**
-   * Formata e limpa a URL base do IP configurado
-   * Ex: "192.168.1.50" -> "http://192.168.1.50"
+   * Retorna os tópicos MQTT baseados na configuração
    */
-  function getBaseUrl() {
-    let host = (state.config.ip || '').trim();
-    if (!host) {
-      host = DEFAULT_CONFIG.ip;
-    }
-    // Remove barras iniciais e finais
-    host = host.replace(/^\/+|\/+$/g, '');
-    
-    // Se não tiver protocolo, adiciona http://
-    if (!/^https?:\/\//i.test(host)) {
-      host = 'http://' + host;
-    }
-    return host;
+  function getTopics() {
+    const base = (state.config.topicBase || DEFAULT_CONFIG.topicBase).replace(/^\/+|\/+$/g, '');
+    return {
+      sensors: `${base}/sensores`,
+      commands: `${base}/comandos`
+    };
   }
 
   /**
@@ -150,24 +144,41 @@
   /**
    * Atualiza o indicador visual de status de conexão
    */
-  function setConnectionStatus(connected, message = null) {
+  function setConnectionStatus(connected, text = null, bannerMsg = null) {
     state.connected = connected;
 
-    if (connected) {
-      state.consecutiveFailures = 0;
+    if (state.config.simulation) {
       dom.statusDot.className = 'status-dot connected';
-      dom.statusText.textContent = state.config.simulation ? 'Simulado' : 'Conectado';
+      dom.statusText.textContent = 'Simulado';
       dom.statusText.style.color = '#34d399';
+      dom.livePill.textContent = 'MODO DEMO';
+      dom.connectionBanner.classList.add('hidden');
+      return;
+    }
+
+    if (connected) {
+      dom.statusDot.className = 'status-dot connected';
+      dom.statusText.textContent = text || 'Conectado (MQTT)';
+      dom.statusText.style.color = '#34d399';
+      dom.livePill.textContent = 'MQTT ONLINE';
       dom.connectionBanner.classList.add('hidden');
     } else {
-      dom.statusDot.className = 'status-dot disconnected';
-      dom.statusText.textContent = 'Desconectado';
-      dom.statusText.style.color = '#f87171';
-      
-      // Exibe banner informativo
-      const targetHost = getBaseUrl().replace(/^https?:\/\//, '');
-      dom.bannerMessage.textContent = message || `Sem resposta de ${targetHost}. Verifique o IP ou ligue o Modo Simulação.`;
-      dom.connectionBanner.classList.remove('hidden');
+      if (text && text.includes('Conectando')) {
+        dom.statusDot.className = 'status-dot connecting';
+        dom.statusText.textContent = text;
+        dom.statusText.style.color = '#fbbf24';
+        dom.livePill.textContent = 'CONECTANDO...';
+      } else {
+        dom.statusDot.className = 'status-dot disconnected';
+        dom.statusText.textContent = text || 'Desconectado';
+        dom.statusText.style.color = '#f87171';
+        dom.livePill.textContent = 'OFFLINE';
+      }
+
+      if (bannerMsg) {
+        dom.bannerMessage.textContent = bannerMsg;
+        dom.connectionBanner.classList.remove('hidden');
+      }
     }
   }
 
@@ -189,9 +200,9 @@
 
     // 1. Meta Informações
     dom.lastUpdatedText.textContent = formatCurrentTime();
-    dom.currentHostText.textContent = state.config.simulation 
+    dom.currentTopicText.textContent = state.config.simulation 
       ? 'Modo Demo (Local)' 
-      : getBaseUrl().replace(/^https?:\/\//, '');
+      : getTopics().sensors;
 
     // 2. Temperatura do Ar (DHT11)
     const temp = parseFloat(data.temp);
@@ -320,24 +331,19 @@
   function generateSimulatedData() {
     const s = state.simulatedState;
 
-    // Se ventoinha ligada, temperatura tende a diminuir levemente
     if (s.ventoinha) {
       s.temp = Math.max(21.0, +(s.temp - 0.1).toFixed(1));
     } else {
-      // Variação orgânica sutil
       const deltaTemp = (Math.random() - 0.48) * 0.1;
       s.temp = +(Math.min(32, Math.max(20, s.temp + deltaTemp))).toFixed(1);
     }
 
-    // Umidade do ar oscila suavemente
     const deltaHum = Math.round((Math.random() - 0.5) * 2);
     s.umidade_ar = Math.min(85, Math.max(40, s.umidade_ar + deltaHum));
 
-    // Se bomba ligada, umidade do solo sobe
     if (s.bomba) {
       s.umidade_solo = Math.min(95, s.umidade_solo + 3);
     } else {
-      // Solo seca lentamente se a bomba estiver desligada
       if (Math.random() > 0.6) {
         s.umidade_solo = Math.max(15, s.umidade_solo - 1);
       }
@@ -346,74 +352,160 @@
     return { ...s };
   }
 
-  /**
-   * Realiza requisição para buscar dados (/dados)
-   */
-  async function fetchGreenhouseData() {
-    if (state.isRequestInProgress) return;
-    state.isRequestInProgress = true;
-
-    // Modo Simulação
-    if (state.config.simulation) {
-      setTimeout(() => {
-        const simData = generateSimulatedData();
-        setConnectionStatus(true);
-        updateUI(simData);
-        state.isRequestInProgress = false;
-      }, 150);
-      return;
-    }
-
-    const endpoint = `${getBaseUrl()}/dados`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2600);
-
-    try {
-      const response = await fetch(endpoint, {
-        method: 'GET',
-        headers: { 'Accept': 'application/json' },
-        signal: controller.signal,
-        cache: 'no-store',
-        mode: 'cors'
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  function startSimulationLoop() {
+    if (state.simTimer) clearInterval(state.simTimer);
+    updateUI(generateSimulatedData());
+    state.simTimer = setInterval(() => {
+      if (state.config.simulation) {
+        updateUI(generateSimulatedData());
       }
+    }, 2500);
+  }
 
-      const data = await response.json();
-      setConnectionStatus(true);
-      updateUI(data);
-    } catch (err) {
-      clearTimeout(timeoutId);
-      state.consecutiveFailures++;
-
-      // Após 2 falhas consecutivas, marca como desconectado
-      if (state.consecutiveFailures >= 2 || !state.connected) {
-        let msg = 'Não foi possível conectar ao Arduino/ESP.';
-        if (err.name === 'AbortError') {
-          msg = 'Tempo limite esgotado ao contatar a estufa (Timeout).';
-        } else if (err.message) {
-          msg = `Falha de rede: ${err.message}`;
-        }
-        setConnectionStatus(false, msg);
-      }
-    } finally {
-      state.isRequestInProgress = false;
+  function stopSimulationLoop() {
+    if (state.simTimer) {
+      clearInterval(state.simTimer);
+      state.simTimer = null;
     }
   }
 
   /**
-   * Envia comando para alternar estado do atuador (/bomba/toggle ou /ventoinha/toggle)
+   * Conecta ao Broker MQTT via WebSocket Seguro (WSS)
    */
-  async function toggleActuator(type, toggleElement) {
+  function connectMQTT() {
+    // Se estiver em modo simulação
+    if (state.config.simulation) {
+      if (state.mqttClient) {
+        try { state.mqttClient.end(true); } catch (e) {}
+        state.mqttClient = null;
+      }
+      setConnectionStatus(true, 'Simulado');
+      startSimulationLoop();
+      return;
+    }
+
+    stopSimulationLoop();
+
+    // Verifica se a biblioteca MQTT.js foi carregada
+    if (typeof mqtt === 'undefined') {
+      console.error('MQTT.js não encontrado.');
+      setConnectionStatus(false, 'Erro MQTT', 'Não foi possível carregar a biblioteca MQTT.js. Verifique sua conexão com a internet.');
+      return;
+    }
+
+    // Se já houver cliente aberto, encerra antes de reconectar
+    if (state.mqttClient) {
+      try {
+        state.mqttClient.removeAllListeners();
+        state.mqttClient.end(true);
+      } catch (e) {}
+      state.mqttClient = null;
+    }
+
+    setConnectionStatus(false, 'Conectando...', 'Conectando ao broker MQTT na nuvem...');
+    
+    const brokerUrl = (state.config.broker || DEFAULT_CONFIG.broker).trim();
+    const topics = getTopics();
+    const clientId = 'estufa_web_' + Math.random().toString(16).substring(2, 10);
+
+    console.log(`[MQTT] Conectando a ${brokerUrl} com ClientId: ${clientId}`);
+
+    try {
+      state.mqttClient = mqtt.connect(brokerUrl, {
+        clientId: clientId,
+        clean: true,
+        connectTimeout: 8000,
+        reconnectPeriod: 4000,
+        keepalive: 30
+      });
+
+      state.mqttClient.on('connect', () => {
+        console.log('[MQTT] Conectado com sucesso ao Broker!');
+        setConnectionStatus(true, 'Conectado (MQTT)');
+        showToast('Conectado ao Broker MQTT!', 'success');
+
+        // Inscreve-se no tópico de sensores da estufa
+        state.mqttClient.subscribe(topics.sensors, { qos: 0 }, (err) => {
+          if (err) {
+            console.error('[MQTT] Erro ao assinar tópico de sensores:', err);
+            showToast('Erro ao subscrever tópico de sensores', 'error');
+          } else {
+            console.log(`[MQTT] Subscrito com sucesso em: ${topics.sensors}`);
+            // Envia um pedido de status inicial para receber leitura imediata
+            requestStatusUpdate();
+          }
+        });
+      });
+
+      state.mqttClient.on('message', (topic, payload) => {
+        if (topic === topics.sensors) {
+          try {
+            const rawStr = payload.toString();
+            const data = JSON.parse(rawStr);
+            setConnectionStatus(true, 'Conectado (MQTT)');
+            updateUI(data);
+          } catch (err) {
+            console.error('[MQTT] Erro ao interpretar payload JSON:', err);
+          }
+        }
+      });
+
+      state.mqttClient.on('reconnect', () => {
+        console.warn('[MQTT] Reconectando ao broker...');
+        setConnectionStatus(false, 'Reconectando...', 'Conexão instável. Tentando restabelecer conexão com o Broker...');
+      });
+
+      state.mqttClient.on('close', () => {
+        console.warn('[MQTT] Conexão fechada.');
+        if (!state.config.simulation) {
+          setConnectionStatus(false, 'Desconectado', 'Desconectado do Broker MQTT. Tentando reconectar automaticamente...');
+        }
+      });
+
+      state.mqttClient.on('offline', () => {
+        console.warn('[MQTT] Broker offline.');
+        setConnectionStatus(false, 'Offline', 'Broker MQTT offline ou sem conexão com a internet.');
+      });
+
+      state.mqttClient.on('error', (err) => {
+        console.error('[MQTT] Erro:', err);
+        setConnectionStatus(false, 'Erro Conexão', `Falha ao conectar com o Broker: ${err.message || 'Erro de rede'}`);
+      });
+    } catch (err) {
+      console.error('[MQTT] Exceção ao inicializar cliente MQTT:', err);
+      setConnectionStatus(false, 'Erro', `Exceção: ${err.message}`);
+    }
+  }
+
+  /**
+   * Envia pedido de telemetria imediata para a estufa
+   */
+  function requestStatusUpdate() {
+    if (state.config.simulation) {
+      updateUI(generateSimulatedData());
+      return;
+    }
+
+    if (!state.mqttClient || !state.connected) return;
+
+    const topics = getTopics();
+    const payload = JSON.stringify({
+      comando: 'status',
+      origem: 'web',
+      timestamp: Date.now()
+    });
+
+    state.mqttClient.publish(topics.commands, payload, { qos: 0 });
+  }
+
+  /**
+   * Envia comando para alternar estado do atuador via MQTT Publish
+   */
+  function toggleActuator(type, toggleElement) {
     const isPump = type === 'bomba';
-    const endpointPath = isPump ? '/bomba/toggle' : '/ventoinha/toggle';
     const switchWrapper = toggleElement.closest('.switch');
 
-    // Se estiver em modo simulação
+    // Modo Simulação
     if (state.config.simulation) {
       if (isPump) {
         state.simulatedState.bomba = state.simulatedState.bomba ? 0 : 1;
@@ -426,134 +518,59 @@
       return;
     }
 
-    // Hardware Real
-    if (switchWrapper) switchWrapper.classList.add('loading');
-
-    const fullUrl = `${getBaseUrl()}${endpointPath}`;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
-
-    try {
-      // Tenta primeiro POST; se o ESP aceitar apenas GET, trata no catch ou fallback
-      let response;
-      try {
-        response = await fetch(fullUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          mode: 'cors'
-        });
-      } catch (postError) {
-        // Fallback para GET caso o microcontrolador não implemente método POST
-        response = await fetch(fullUrl, {
-          method: 'GET',
-          signal: controller.signal,
-          mode: 'cors'
-        });
-      }
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`Erro ${response.status} ao controlar ${type}`);
-      }
-
-      // Se o servidor retornar o JSON com o novo estado atualizado
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const newData = await response.json();
-        updateUI(newData);
-      } else {
-        // Se retornar apenas OK texto, força uma consulta imediata
-        fetchGreenhouseData();
-      }
-
-      showToast(`Comando enviado para ${isPump ? 'Bomba de Água' : 'Ventoinha'}!`, 'success');
-    } catch (err) {
-      clearTimeout(timeoutId);
-      // Reverte estado visual do toggle em caso de falha
+    // Modo Nuvem MQTT
+    if (!state.mqttClient || !state.connected) {
       toggleElement.checked = !toggleElement.checked;
-      showToast(`Falha ao alterar ${isPump ? 'Bomba' : 'Ventoinha'}: ${err.message}`, 'error');
-      setConnectionStatus(false);
-    } finally {
-      if (switchWrapper) switchWrapper.classList.remove('loading');
-    }
-  }
-
-  /**
-   * Inicia ou reinicia o timer periódico de polling
-   */
-  function startPolling() {
-    if (state.pollingTimer) {
-      clearInterval(state.pollingTimer);
-    }
-    // Primeira execução imediata
-    fetchGreenhouseData();
-    // Agendamento periódico
-    state.pollingTimer = setInterval(fetchGreenhouseData, state.config.interval);
-  }
-
-  /**
-   * Testa a conexão com o IP fornecido
-   */
-  async function testConnection() {
-    const rawHost = dom.ipInput.value.trim() || DEFAULT_CONFIG.ip;
-    let url = rawHost.replace(/^\/+|\/+$/g, '');
-    if (!/^https?:\/\//i.test(url)) {
-      url = 'http://' + url;
-    }
-
-    dom.testResultText.textContent = 'Testando comunicação com a estufa...';
-    dom.testResultText.className = 'test-result-text';
-    dom.testConnBtn.disabled = true;
-
-    // Se simulação estiver marcada no modal
-    if (dom.simulationToggle.checked) {
-      setTimeout(() => {
-        dom.testResultText.textContent = '✓ Modo Simulação ativo (Conexão simulada com sucesso!)';
-        dom.testResultText.className = 'test-result-text success';
-        dom.testConnBtn.disabled = false;
-      }, 300);
+      showToast('Não conectado ao Broker MQTT! Conecte-se antes de enviar comandos.', 'error');
       return;
     }
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    if (switchWrapper) switchWrapper.classList.add('loading');
 
-    try {
-      const response = await fetch(`${url}/dados`, {
-        method: 'GET',
-        signal: controller.signal,
-        mode: 'cors'
-      });
-      clearTimeout(timeoutId);
+    const topics = getTopics();
+    const commandName = isPump ? 'bomba_toggle' : 'ventoinha_toggle';
+    
+    // Payload JSON padronizado aceito pelo ESP32
+    const payload = JSON.stringify({
+      comando: commandName,
+      atuador: type,
+      acao: 'toggle',
+      origem: 'web',
+      timestamp: Date.now()
+    });
 
-      if (response.ok) {
-        dom.testResultText.textContent = `✓ Sucesso! Conectado a ${url} (HTTP ${response.status})`;
-        dom.testResultText.className = 'test-result-text success';
+    state.mqttClient.publish(topics.commands, payload, { qos: 1 }, (err) => {
+      if (switchWrapper) switchWrapper.classList.remove('loading');
+
+      if (err) {
+        toggleElement.checked = !toggleElement.checked;
+        showToast(`Erro ao publicar comando: ${err.message}`, 'error');
       } else {
-        dom.testResultText.textContent = `⚠️ Respondeu com erro: HTTP ${response.status}`;
-        dom.testResultText.className = 'test-result-text error';
+        showToast(`Comando enviado: ${isPump ? 'Bomba de Água' : 'Ventoinha'}!`, 'success');
       }
-    } catch (err) {
-      clearTimeout(timeoutId);
-      dom.testResultText.textContent = `✕ Não foi possível alcançar ${url}. Verifique o IP e o Wi-Fi.`;
-      dom.testResultText.className = 'test-result-text error';
-    } finally {
-      dom.testConnBtn.disabled = false;
-    }
+    });
   }
 
   /**
-   * Modal de Configurações: Abertura e Fechamento
+   * Atualiza a pré-visualização dos tópicos no modal
+   */
+  function updateTopicPreviews() {
+    const base = (dom.topicInput.value.trim() || DEFAULT_CONFIG.topicBase).replace(/^\/+|\/+$/g, '');
+    dom.previewTopicSensors.textContent = `${base}/sensores`;
+    dom.previewTopicCommands.textContent = `${base}/comandos`;
+  }
+
+  /**
+   * Modal de Configurações
    */
   function openSettings() {
-    dom.ipInput.value = state.config.ip.replace(/^https?:\/\//i, '');
-    dom.intervalSelect.value = String(state.config.interval);
+    dom.brokerInput.value = state.config.broker;
+    dom.topicInput.value = state.config.topicBase;
     dom.simulationToggle.checked = state.config.simulation;
     dom.testResultText.textContent = '';
+    updateTopicPreviews();
     dom.settingsModal.classList.remove('hidden');
-    dom.ipInput.focus();
+    dom.brokerInput.focus();
   }
 
   function closeSettings() {
@@ -561,23 +578,79 @@
   }
 
   function saveSettings() {
-    const newIp = dom.ipInput.value.trim() || DEFAULT_CONFIG.ip;
-    const newInterval = parseInt(dom.intervalSelect.value, 10) || DEFAULT_CONFIG.interval;
+    const newBroker = dom.brokerInput.value.trim() || DEFAULT_CONFIG.broker;
+    const newTopic = dom.topicInput.value.trim() || DEFAULT_CONFIG.topicBase;
     const newSimMode = dom.simulationToggle.checked;
 
-    state.config.ip = newIp;
-    state.config.interval = newInterval;
+    state.config.broker = newBroker;
+    state.config.topicBase = newTopic;
     state.config.simulation = newSimMode;
 
-    localStorage.setItem(STORAGE_KEYS.IP, newIp);
-    localStorage.setItem(STORAGE_KEYS.INTERVAL, newInterval);
+    localStorage.setItem(STORAGE_KEYS.BROKER, newBroker);
+    localStorage.setItem(STORAGE_KEYS.TOPIC_BASE, newTopic);
     localStorage.setItem(STORAGE_KEYS.SIMULATION, newSimMode);
 
     closeSettings();
-    showToast('Configurações salvas com sucesso!', 'success');
+    showToast('Configurações salvas! Reconectando...', 'success');
     
-    // Reinicia polling com os novos parâmetros
-    startPolling();
+    // Reconecta com as novas configurações
+    connectMQTT();
+  }
+
+  /**
+   * Testa e reconecta manualmente ao Broker
+   */
+  function manualReconnect() {
+    dom.testResultText.textContent = 'Tentando conectar ao broker MQTT...';
+    dom.testResultText.className = 'test-result-text';
+    dom.reconnectBtn.disabled = true;
+
+    if (dom.simulationToggle.checked) {
+      setTimeout(() => {
+        dom.testResultText.textContent = '✓ Modo Simulação selecionado.';
+        dom.testResultText.className = 'test-result-text success';
+        dom.reconnectBtn.disabled = false;
+      }, 300);
+      return;
+    }
+
+    const testBroker = dom.brokerInput.value.trim() || DEFAULT_CONFIG.broker;
+    const testClientId = 'test_' + Math.random().toString(16).substring(2, 8);
+
+    try {
+      const testClient = mqtt.connect(testBroker, {
+        clientId: testClientId,
+        clean: true,
+        connectTimeout: 5000
+      });
+
+      const timeoutId = setTimeout(() => {
+        try { testClient.end(true); } catch(e){}
+        dom.testResultText.textContent = '✕ Tempo limite excedido ao contatar o Broker.';
+        dom.testResultText.className = 'test-result-text error';
+        dom.reconnectBtn.disabled = false;
+      }, 6000);
+
+      testClient.on('connect', () => {
+        clearTimeout(timeoutId);
+        dom.testResultText.textContent = '✓ Conexão WebSocket MQTT realizada com sucesso!';
+        dom.testResultText.className = 'test-result-text success';
+        dom.reconnectBtn.disabled = false;
+        try { testClient.end(true); } catch(e){}
+      });
+
+      testClient.on('error', (err) => {
+        clearTimeout(timeoutId);
+        dom.testResultText.textContent = `✕ Erro: ${err.message || 'Falha de conexão'}`;
+        dom.testResultText.className = 'test-result-text error';
+        dom.reconnectBtn.disabled = false;
+        try { testClient.end(true); } catch(e){}
+      });
+    } catch (e) {
+      dom.testResultText.textContent = `✕ Erro: ${e.message}`;
+      dom.testResultText.className = 'test-result-text error';
+      dom.reconnectBtn.disabled = false;
+    }
   }
 
   /**
@@ -591,9 +664,9 @@
     // Botão de atualização manual
     dom.refreshBtn.addEventListener('click', () => {
       dom.refreshBtn.classList.add('spinning');
-      fetchGreenhouseData().finally(() => {
-        setTimeout(() => dom.refreshBtn.classList.remove('spinning'), 500);
-      });
+      requestStatusUpdate();
+      showToast('Solicitação de leitura enviada via MQTT!', 'info');
+      setTimeout(() => dom.refreshBtn.classList.remove('spinning'), 700);
     });
 
     // Modal de Configurações
@@ -602,7 +675,8 @@
     dom.closeSettingsBtn.addEventListener('click', closeSettings);
     dom.cancelSettingsBtn.addEventListener('click', closeSettings);
     dom.saveSettingsBtn.addEventListener('click', saveSettings);
-    dom.testConnBtn.addEventListener('click', testConnection);
+    dom.reconnectBtn.addEventListener('click', manualReconnect);
+    dom.topicInput.addEventListener('input', updateTopicPreviews);
 
     // Fechar modal ao clicar fora
     dom.settingsModal.addEventListener('click', (e) => {
@@ -618,10 +692,10 @@
       }
     });
 
-    // Detectar retorno à aba do navegador para sincronizar na hora
+    // Detectar retorno à aba do navegador
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') {
-        fetchGreenhouseData();
+      if (document.visibilityState === 'visible' && state.connected) {
+        requestStatusUpdate();
       }
     });
   }
@@ -631,12 +705,11 @@
    */
   function init() {
     setupEventListeners();
-    dom.currentHostText.textContent = state.config.simulation 
+    dom.currentTopicText.textContent = state.config.simulation 
       ? 'Modo Demo (Local)' 
-      : getBaseUrl().replace(/^https?:\/\//, '');
+      : getTopics().sensors;
 
-    // Se estiver em modo simulação logo de cara ou primeiro carregamento
-    startPolling();
+    connectMQTT();
   }
 
   // Executa após carregamento do DOM
