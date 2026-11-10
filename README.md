@@ -59,7 +59,15 @@ O usuário não precisa digitar URLs complexas de Broker ou nomes manuais de tó
 | **GND** | **GND** | Terra comum |
 | **Fonte Externa 3.3V** | **VCC / CH_PD (EN)** | O ESP-01 requer ~300mA em picos de transmissão Wi-Fi |
 
-### 2. Arduino Uno ➔ Sensores & Relés
+### 2. Arduino Uno ➔ Display LCD 16x2 (I2C)
+| Pino Arduino Uno | Pino LCD I2C | Descrição |
+| :--- | :--- | :--- |
+| **Pino Analógico A4** | **SDA** | Linha de Dados I2C |
+| **Pino Analógico A5** | **SCL** | Linha de Clock I2C |
+| **5V** | **VCC** | Alimentação do Display |
+| **GND** | **GND** | Terra Comum |
+
+### 3. Arduino Uno ➔ Sensores & Relés
 | Componente | Pino Arduino Uno | Descrição |
 | :--- | :--- | :--- |
 | **Sensor DHT11** | `Pino Digital 4` | Temperatura do Ar (°C) e Umidade do Ar (%) |
@@ -67,6 +75,7 @@ O usuário não precisa digitar URLs complexas de Broker ou nomes manuais de tó
 | **Sensor Boia de Nível** | `Pino Digital 7` | Leitura digital (`INPUT_PULLUP`: LOW = OK, HIGH = Crítico) |
 | **Relé 1 (Bomba)** | `Pino Digital 5` | Acionamento da bomba de água (irrigação) |
 | **Relé 2 (Ventoinha)** | `Pino Digital 6` | Acionamento do cooler de circulação |
+| **LED Pareamento (Onboard)**| `Pino Digital 13` | Pisca 3 vezes ao parear e fica aceso |
 
 ---
 

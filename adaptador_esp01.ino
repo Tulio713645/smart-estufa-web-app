@@ -65,7 +65,10 @@ void callbackMQTT(char* topic, byte* payload, unsigned int length) {
   }
 
   // Encaminha o comando recebido do Web App para o Arduino Uno via Serial
-  if (comando.indexOf("bomba_toggle") >= 0) {
+  if (comando.indexOf("parear") >= 0) {
+    Serial.println("CMD:parear");
+  }
+  else if (comando.indexOf("bomba_toggle") >= 0) {
     Serial.println("CMD:bomba_toggle");
   } 
   else if (comando.indexOf("ventoinha_toggle") >= 0) {

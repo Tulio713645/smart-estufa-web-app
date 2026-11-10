@@ -439,6 +439,13 @@
             console.error('[MQTT] Erro ao subscrever:', err);
             showToast('Erro ao subscrever sensores', 'error');
           } else {
+            // Envia confirmação de pareamento para exibir na tela LCD do Arduino!
+            const pairPayload = JSON.stringify({
+              comando: 'parear',
+              origem: 'web',
+              timestamp: Date.now()
+            });
+            state.mqttClient.publish(topics.commands, pairPayload, { qos: 1 });
             // Solicita telemetria imediata
             requestStatusUpdate();
           }
