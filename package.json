@@ -1,0 +1,25 @@
+{
+  "name": "agrolink-estufa",
+  "version": "1.0.0",
+  "description": "AgroLink - Aplicativo Android Oficial de Monitoramento e Controle Inteligente de Estufas",
+  "main": "index.html",
+  "scripts": {
+    "build": "echo \"Frontend pronto para empacotamento Android\"",
+    "build:apk": "call gerar_apk.bat"
+  },
+  "keywords": [
+    "agrolink",
+    "estufa",
+    "arduino",
+    "esp8266",
+    "mqtt",
+    "android",
+    "apk"
+  ],
+  "author": "Túlio",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/android": "^6.0.0"
+  }
+}

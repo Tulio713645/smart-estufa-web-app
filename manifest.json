@@ -1,0 +1,18 @@
+{
+  "name": "AgroLink - Gestão de Estufas Inteligentes",
+  "short_name": "AgroLink",
+  "description": "Aplicativo oficial de monitoramento e controle inteligente de estufas automatizadas.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#06120d",
+  "theme_color": "#06120d",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "assets/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

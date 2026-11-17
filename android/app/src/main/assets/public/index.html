@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#06120d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AgroLink - Gestão Inteligente de Estufas</title>
+  
+  <!-- Ícone Oficial AgroLink -->
+  <link rel="icon" type="image/png" href="assets/logo.png">
+  <link rel="apple-touch-icon" href="assets/logo.png">
+  <link rel="manifest" href="manifest.json">
+  
+  <!-- Folha de Estilos Oficial -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Cliente MQTT Oficial para Web & Mobile (MQTT.js sobre WebSockets Seguro) -->
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+</head>
+<body>
+
+  <!-- =========================================================================
+       CABEÇALHO OFICIAL AGROLINK
+       ========================================================================= -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="header-branding" id="btnBrandHome" role="button" title="Voltar ao Início">
+        <div class="logo-wrapper">
+          <img src="assets/logo.png" alt="Logo AgroLink" class="logo-image">
+          <span class="logo-glow"></span>
+        </div>
+        <div>
+          <h1 class="header-title">AgroLink</h1>
+          <span class="header-subtitle" id="headerSubtitle">Gestão de Estufas</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <!-- Botão Tutorial de Conexão -->
+        <button class="icon-btn" id="btnOpenTutorial" title="Tutorial de Conexão da Estufa" aria-label="Tutorial de Conexão">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+        </button>
+
+        <!-- Botão Notificações -->
+        <button class="icon-btn" id="btnOpenNotifications" title="Avisos e Alertas" aria-label="Notificações">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <span class="notification-badge hidden" id="notificationBadge"></span>
+        </button>
+
+        <!-- Botão Adicionar Estufa (+) -->
+        <button class="icon-btn btn-add-green" id="btnAddGreenhouse" title="Parear Nova Estufa" aria-label="Adicionar Estufa">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       VISÃO 1: GERENCIADOR MULTI-ESTUFAS (ESTILO SMART LIFE)
+       ========================================================================= -->
+  <section class="view-container active" id="viewGreenhousesList">
+    <div class="main-content">
+      <div class="dashboard-banner">
+        <div class="banner-text">
+          <h2>Minhas Estufas</h2>
+          <p>Selecione uma unidade para monitorar ou gerenciar em tempo real.</p>
+        </div>
+        <div class="banner-stat">
+          <span class="stat-count" id="onlineCountBadge">0 Online</span>
+        </div>
+      </div>
+
+      <!-- Grid de Cards de Estufas Cadastradas -->
+      <div class="greenhouses-grid" id="greenhousesGrid">
+        <!-- Renderizado dinamicamente pelo JavaScript -->
+      </div>
+
+      <!-- Dica Rápida de Interação -->
+      <div class="smart-gesture-hint">
+        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span><strong>Dica:</strong> Toque rápido para abrir. Segure o dedo em uma estufa para <strong>Editar</strong> ou <strong>Excluir</strong>.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       VISÃO 2: DETALHES E CONTROLE DA ESTUFA SELECIONADA
+       ========================================================================= -->
+  <section class="view-container" id="viewGreenhouseDetail">
+    <div class="main-content">
+
+      <!-- Barra Superior da Estufa com Botão Voltar -->
+      <div class="detail-nav-bar">
+        <button class="btn-back" id="btnBackToList" aria-label="Voltar para a lista">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <span>Estufas</span>
+        </button>
+
+        <div class="detail-title-group">
+          <h2 class="active-greenhouse-title" id="activeGreenhouseName">Estufa Alpha</h2>
+          <span class="device-id-tag" id="activeGreenhouseId">ID: estufa_01</span>
+        </div>
+
+        <div class="connection-status-pill" id="detailStatusBadge">
+          <span class="status-indicator-dot disconnected" id="detailStatusDot"></span>
+          <span class="status-indicator-text" id="detailStatusText">Offline</span>
+        </div>
+      </div>
+
+      <!-- Card de Ação Rápida de Conexão Sem Fio -->
+      <div class="wifi-action-card" id="wifiActionCard">
+        <div class="wifi-card-info">
+          <div class="wifi-icon-badge" id="wifiIconBadge">
+            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+              <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+              <line x1="12" y1="20" x2="12.01" y2="20"></line>
+            </svg>
+          </div>
+          <div>
+            <strong id="wifiCardTitle">Rede Sem Fio Desconectada</strong>
+            <span id="wifiCardSubtitle">Toque para sincronizar com o adaptador ESP-12E</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btnToggleConnection">
+          <span id="btnConnectionLabel">Conectar</span>
+        </button>
+      </div>
+
+      <!-- =====================================================================
+           AGRUPAMENTO LÓGICO 1: SOLO & BOMBA D'ÁGUA
+           ===================================================================== -->
+      <div class="section-group">
+        <div class="section-group-header">
+          <div class="header-accent-dot green"></div>
+          <h3>Solo &amp; Irrigação</h3>
+          <span class="sub-hint">Toque no card para ver o gráfico</span>
+        </div>
+
+        <div class="group-content-grid">
+          <!-- Card de Umidade do Solo (Interativo com Gráfico) -->
+          <div class="sensor-card soil-card clickable-card" id="cardSoilMetric" role="button" title="Abrir Histórico da Umidade do Solo">
+            <div class="card-top">
+              <div class="sensor-icon-box soil">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"></path>
+                  <path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"></path>
+                </svg>
+              </div>
+              <span class="graph-pill-badge">Gráfico 📈</span>
+            </div>
+
+            <div class="card-metric-row">
+              <div>
+                <span class="metric-label">Umidade do Solo</span>
+                <div class="metric-value-box">
+                  <span class="metric-value" id="valSoil">--</span>
+                  <span class="metric-unit">%</span>
+                </div>
+              </div>
+              <span class="badge" id="badgeSoil">Aguardando...</span>
+            </div>
+
+            <!-- Barra de Progresso com Escala Agronômica Ideal -->
+            <div class="soil-bar-container">
+              <div class="soil-bar-track">
+                <div class="soil-bar-fill" id="soilBarFill" style="width: 0%;"></div>
+              </div>
+              <div class="soil-bar-scale">
+                <span>0% (Seco)</span>
+                <span class="scale-target">60% - 80% (Ideal)</span>
+                <span>100% (Saturado)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- BLOCO INTERATIVO DA BOMBA D'ÁGUA -->
+          <div class="actuator-interactive-unit">
+            <button class="actuator-cube-block" id="blockPump" aria-pressed="false" aria-label="Ligar ou desligar Bomba de Água">
+              <!-- Brilho Suave de Estado Intermediário (Piscando) -->
+              <div class="cube-pulsing-layer"></div>
+              
+              <!-- Animação Contínua de Torneira com Água Saindo -->
+              <div class="water-tap-animation" id="waterTapAnimation">
+                <div class="tap-spout">
+                  <svg viewBox="0 0 40 40" width="46" height="46" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <path d="M8 12h14v10a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V12z" stroke-linecap="round"></path>
+                    <path d="M15 6v6"></path>
+                    <path d="M10 6h10"></path>
+                  </svg>
+                </div>
+                <div class="water-drops-stream">
+                  <span class="drop drop-1"></span>
+                  <span class="drop drop-2"></span>
+                  <span class="drop drop-3"></span>
+                </div>
+              </div>
+
+              <span class="cube-label">Bomba de Água</span>
+              <span class="cube-state-badge" id="pumpStateBadge">DESLIGADA</span>
+              <span class="cube-waiting-text" id="pumpWaitingText">Aguardando estufa...</span>
+            </button>
+
+            <!-- Chave de Controle Automático da Bomba -->
+            <div class="auto-mode-bar">
+              <div class="auto-mode-info">
+                <span class="auto-mode-title">Automático da Bomba</span>
+                <span class="auto-mode-desc">Irriga em solo &lt;40% e desliga em 75%</span>
+              </div>
+              <label class="switch" for="switchAutoPump">
+                <input type="checkbox" id="switchAutoPump" checked aria-label="Ativar modo automático da bomba">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+            <!-- Trava de Segurança por Nível de Água -->
+            <div class="safety-lock-banner hidden" id="pumpSafetyBanner">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                <line x1="12" y1="9" x2="12" y2="13"></line>
+                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+              </svg>
+              <span><strong>Trava de Segurança:</strong> Reservatório vazio. Bomba bloqueada!</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================================================================
+           AGRUPAMENTO LÓGICO 2: CLIMA & VENTOINHA
+           ===================================================================== -->
+      <div class="section-group">
+        <div class="section-group-header">
+          <div class="header-accent-dot purple"></div>
+          <h3>Clima &amp; Ventilação</h3>
+          <span class="sub-hint">Toque nos cards para ver o gráfico</span>
+        </div>
+
+        <div class="group-content-grid">
+          <!-- Cards de Temperatura e Umidade do Ar Lado a Lado -->
+          <div class="climate-cards-duo">
+            <!-- Card de Temperatura do Ar -->
+            <div class="sensor-card temp-card clickable-card" id="cardTempMetric" role="button" title="Abrir Histórico de Temperatura">
+              <div class="card-top">
+                <div class="sensor-icon-box temp">
+                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"></path>
+                  </svg>
+                </div>
+                <span class="graph-pill-badge">📈</span>
+              </div>
+              <span class="metric-label">Temperatura do Ar</span>
+              <div class="metric-value-box">
+                <span class="metric-value" id="valTemp">--</span>
+                <span class="metric-unit">°C</span>
+              </div>
+              <span class="badge" id="badgeTemp">Aguardando...</span>
+            </div>
+
+            <!-- Card de Umidade do Ar -->
+            <div class="sensor-card hum-card clickable-card" id="cardHumMetric" role="button" title="Abrir Histórico de Umidade do Ar">
+              <div class="card-top">
+                <div class="sensor-icon-box hum">
+                  <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none">
+                    <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
+                  </svg>
+                </div>
+                <span class="graph-pill-badge">📈</span>
+              </div>
+              <span class="metric-label">Umidade do Ar</span>
+              <div class="metric-value-box">
+                <span class="metric-value" id="valHum">--</span>
+                <span class="metric-unit">%</span>
+              </div>
+              <span class="badge" id="badgeHum">Aguardando...</span>
+            </div>
+          </div>
+
+          <!-- BLOCO INTERATIVO DA VENTOINHA -->
+          <div class="actuator-interactive-unit">
+            <button class="actuator-cube-block fan-cube" id="blockFan" aria-pressed="false" aria-label="Ligar ou desligar Ventoinha">
+              <div class="cube-pulsing-layer"></div>
+              
+              <!-- Animação Contínua de Rotação da Ventoinha -->
+              <div class="fan-animation-box" id="fanAnimationBox">
+                <svg class="fan-rotor-svg" id="fanRotorSvg" viewBox="0 0 24 24" width="50" height="50" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z"></path>
+                  <circle cx="12" cy="12" r="2.5"></circle>
+                </svg>
+              </div>
+
+              <span class="cube-label">Ventoinha (Cooler)</span>
+              <span class="cube-state-badge" id="fanStateBadge">DESLIGADA</span>
+              <span class="cube-waiting-text" id="fanWaitingText">Aguardando estufa...</span>
+            </button>
+
+            <!-- Chave de Controle Automático da Ventoinha -->
+            <div class="auto-mode-bar">
+              <div class="auto-mode-info">
+                <span class="auto-mode-title">Automático da Ventoinha</span>
+                <span class="auto-mode-desc">Aciona se a temperatura passar de 30°C</span>
+              </div>
+              <label class="switch" for="switchAutoFan">
+                <input type="checkbox" id="switchAutoFan" checked aria-label="Ativar modo automático da ventoinha">
+                <span class="slider round"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- =====================================================================
+           AGRUPAMENTO LÓGICO 3: RESERVATÓRIO DE ÁGUA
+           ===================================================================== -->
+      <div class="section-group">
+        <div class="section-group-header">
+          <div class="header-accent-dot blue"></div>
+          <h3>Reservatório de Água</h3>
+        </div>
+
+        <div class="sensor-card water-reservoir-card">
+          <div class="water-card-layout">
+            <div class="water-info-col">
+              <div class="sensor-icon-box water" id="waterIconBox">
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none">
+                  <path d="M12 2v20"></path>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              </div>
+              <div>
+                <span class="metric-label">Status do Reservatório</span>
+                <h4 class="water-level-title" id="valWaterLevel">Nível Normal</h4>
+                <p class="water-level-desc" id="waterLevelDesc">Abastecimento seguro para irrigação automática.</p>
+              </div>
+            </div>
+
+            <!-- Tanque Visual Ilustrativo -->
+            <div class="water-visual-tank ok" id="waterVisualTank" aria-hidden="true">
+              <div class="water-tank-liquid" id="waterTankLiquid"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       MODAL 1: TELA DE GRÁFICOS HISTÓRICOS (POR CLIQUE NO CARD)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalHistoricalGraph" role="dialog" aria-modal="true" aria-labelledby="graphModalTitle">
+    <div class="modal-card modal-graph-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span class="graph-header-icon" id="graphHeaderIcon">📈</span>
+          <h3 id="graphModalTitle">Histórico de Temperatura</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseGraph" aria-label="Fechar Gráfico">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Filtro Temporal: Dia e Mês -->
+        <div class="graph-filter-bar">
+          <button class="btn-filter-tab active" id="btnFilterDay">Dia (Últimas 24h)</button>
+          <button class="btn-filter-tab" id="btnFilterMonth">Mês (Últimos 30 dias)</button>
+        </div>
+
+        <!-- Estatísticas Rápidas do Período -->
+        <div class="graph-stats-row">
+          <div class="stat-box">
+            <span class="stat-box-label">Mínima</span>
+            <strong class="stat-box-val" id="graphStatMin">--</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-box-label">Média</span>
+            <strong class="stat-box-val highlight" id="graphStatAvg">--</strong>
+          </div>
+          <div class="stat-box">
+            <span class="stat-box-label">Máxima</span>
+            <strong class="stat-box-val" id="graphStatMax">--</strong>
+          </div>
+        </div>
+
+        <!-- Área de Desenho do Gráfico (Canvas com Faixa Ideal e Lacunas Desconectadas) -->
+        <div class="canvas-container">
+          <canvas id="historicalChartCanvas" width="480" height="240"></canvas>
+          <div class="canvas-legend">
+            <span class="legend-item"><span class="legend-color-line"></span> Leitura Real</span>
+            <span class="legend-item"><span class="legend-color-ideal"></span> Faixa Agronômica Ideal</span>
+            <span class="legend-item"><span class="legend-color-gap"></span> Período Desligado (Offline)</span>
+          </div>
+        </div>
+
+        <p class="graph-offline-note">
+          ℹ️ <strong>Transparência de Dados:</strong> Quando a estufa fica desligada da energia, o gráfico apresenta lacunas pontilhadas sem inventar dados artificiais.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: TUTORIAL PASSO A PASSO DE CONFIGURAÇÃO DE REDE
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalTutorial" role="dialog" aria-modal="true" aria-labelledby="tutorialModalTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 16v-4"></path>
+            <path d="M12 8h.01"></path>
+          </svg>
+          <h3 id="tutorialModalTitle">Como Conectar a Estufa</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseTutorial" aria-label="Fechar Tutorial">✕</button>
+      </div>
+
+      <div class="modal-body tutorial-steps-body">
+        <!-- Passo 1 -->
+        <div class="tutorial-step-card">
+          <div class="step-badge">Passo 1</div>
+          <div class="step-content">
+            <h4>Pressione o botão físico na estufa</h4>
+            <p>Segure o botão físico no painel da estufa por <strong>3 segundos</strong> até ouvir o <strong>alarme sonoro longo</strong> tocar, indicando que entrou no modo de configuração sem fio.</p>
+          </div>
+        </div>
+
+        <!-- Passo 2 -->
+        <div class="tutorial-step-card">
+          <div class="step-badge">Passo 2</div>
+          <div class="step-content">
+            <h4>Observe a telinha de cristal líquido</h4>
+            <p>O display LCD da estufa exibirá <strong>"Modo Config"</strong> e o identificador de rede sem fio <strong>"AgroLink-Estufa"</strong> emitido pelo adaptador ESP-12E.</p>
+          </div>
+        </div>
+
+        <!-- Passo 3 -->
+        <div class="tutorial-step-card">
+          <div class="step-badge">Passo 3</div>
+          <div class="step-content">
+            <h4>Conecte pelo AgroLink</h4>
+            <p>No aplicativo, toque no botão <strong>Conectar</strong> ou cadastre a nova estufa pelo botão <strong>+</strong>. Ao concluir, a estufa sai da configuração, toca 2 bipes rápidos e fica <strong>Online</strong>!</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary btn-block" id="btnGotItTutorial">Entendido!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 3: ADICIONAR / EDITAR ESTUFA
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalAddGreenhouse" role="dialog" aria-modal="true" aria-labelledby="addGreenhouseTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2z"></path>
+            <path d="M12 6v12"></path>
+          </svg>
+          <h3 id="addGreenhouseTitle">Adicionar Estufa</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseAddModal" aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="inputGreenhouseName">Nome da Estufa</label>
+          <input type="text" id="inputGreenhouseName" class="form-input" placeholder="Ex: Estufa 1 - Tomates">
+        </div>
+
+        <div class="form-group">
+          <label for="inputGreenhouseId">Código / ID Único do Adaptador</label>
+          <div class="input-with-prefix">
+            <span class="input-prefix">agrolink/</span>
+            <input type="text" id="inputGreenhouseId" placeholder="estufa_01">
+          </div>
+          <small class="form-help">Mesmo identificador configurado no ESP-12E.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="selectCropType">Tipo de Cultivo / Plantação</label>
+          <select id="selectCropType" class="form-select">
+            <option value="hortalicas">🥬 Hortaliças em Geral</option>
+            <option value="tomate">🍅 Tomateiro</option>
+            <option value="morango">🍓 Morango</option>
+            <option value="pimentao">🫑 Pimentão</option>
+            <option value="flores">🌸 Flores e Mudas</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelAddModal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSaveGreenhouse">Salvar Estufa</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 4: GAVETA DE NOTIFICAÇÕES INTELIGENTES
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalNotifications" role="dialog" aria-modal="true" aria-labelledby="notifTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+          </svg>
+          <h3 id="notifTitle">Notificações da Estufa</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseNotifications" aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="modal-body notifications-list" id="notificationsList">
+        <!-- Notificações geradas dinamicamente -->
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnClearNotifications">Limpar Avisos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toasts de Notificação Rápida -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Script Principal AgroLink -->
+  <script src="app.js"></script>
+</body>
+</html>
