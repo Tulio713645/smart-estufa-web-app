@@ -1,0 +1,10 @@
+<resources>
+    <!-- Tema Oficial AgroLink: Sem Action Bar genérica, com Barra de Status do Sistema VISÍVEL -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <!-- Barra de Status do Sistema (Horário, Bateria, Wi-Fi) SEMPRE VISÍVEL -->
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:statusBarColor">#06100b</item>
+        <item name="android:navigationBarColor">#06100b</item>
+        <item name="android:windowBackground">#06100b</item>
+    </style>
+</resources>

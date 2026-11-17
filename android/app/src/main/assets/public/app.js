@@ -1,11 +1,14 @@
 /**
  * =========================================================================================
- * AGROLINK - APLICATIVO ANDROID OFICIAL
+ * AGROLINK - APLICATIVO ANDROID OFICIAL DEFINITIVO
  * Script Principal: app.js
  * =========================================================================================
  * 
  * Funcionalidades:
- *  - Gerenciamento de múltiplas estufas (estilo Smart Life) com persistência local
+ *  - Gerenciamento de múltiplas estufas (estilo Smart Life / automação industrial)
+ *  - Gesto de Long Press aprimorado + botão ⋮ para Edição e Exclusão via Bottom Sheet
+ *  - 100% livre de classificações de frutas / IA de frutas
+ *  - Design system profissional e coeso (zero visual de "Android puro" cru)
  *  - Comunicação via MQTT Seguro (EMQX Cloud com WebSockets Seguro TLS/SSL)
  *  - Tópicos dinâmicos e isolados por estufa: agrolink/{id_estufa}/...
  *  - Confirmação bidirecional com estado intermediário (piscando suavemente)
@@ -37,12 +40,11 @@
     NOTIFICATIONS: 'agrolink_notifications'
   };
 
-  // --- ESTUFAS PADRÃO (SE FOR A PRIMEIRA VEZ ABRINDO O APP) ---
+  // --- ESTUFAS PADRÃO (SEM CLASSIFICAÇÃO DE FRUTAS) ---
   const DEFAULT_GREENHOUSES = [
     {
       id: 'estufa_01',
-      nome: 'Estufa 1 - Tomates',
-      cultura: 'tomate',
+      nome: 'Estufa 1',
       online: false,
       telemetria: {
         temp: 24.5,
@@ -57,8 +59,7 @@
     },
     {
       id: 'estufa_02',
-      nome: 'Estufa 2 - Hortaliças',
-      cultura: 'hortalicas',
+      nome: 'Estufa 2',
       online: false,
       telemetria: {
         temp: 23.0,
@@ -77,6 +78,7 @@
   const state = {
     greenhouses: [],
     activeGreenhouseId: null,
+    selectedOptionGreenhouseId: null, // Estufa selecionada no Bottom Sheet de opções
     mqttClient: null,
     isConnectingMqtt: false,
     
@@ -152,7 +154,27 @@
     waterLevelDesc: document.getElementById('waterLevelDesc'),
     waterVisualTank: document.getElementById('waterVisualTank'),
 
-    // Modais
+    // Modais e Bottom Sheet
+    modalGreenhouseOptions: document.getElementById('modalGreenhouseOptions'),
+    optionsSheetTitle: document.getElementById('optionsSheetTitle'),
+    optionsSheetSubtitle: document.getElementById('optionsSheetSubtitle'),
+    btnSheetOpen: document.getElementById('btnSheetOpen'),
+    btnSheetEdit: document.getElementById('btnSheetEdit'),
+    btnSheetDelete: document.getElementById('btnSheetDelete'),
+    btnSheetCancel: document.getElementById('btnSheetCancel'),
+
+    modalEditGreenhouse: document.getElementById('modalEditGreenhouse'),
+    inputEditGreenhouseName: document.getElementById('inputEditGreenhouseName'),
+    btnCloseEditModal: document.getElementById('btnCloseEditModal'),
+    btnCancelEditModal: document.getElementById('btnCancelEditModal'),
+    btnSaveEditModal: document.getElementById('btnSaveEditModal'),
+
+    modalConfirmDelete: document.getElementById('modalConfirmDelete'),
+    deleteConfirmText: document.getElementById('deleteConfirmText'),
+    btnCloseDeleteModal: document.getElementById('btnCloseDeleteModal'),
+    btnCancelDeleteModal: document.getElementById('btnCancelDeleteModal'),
+    btnConfirmDeleteModal: document.getElementById('btnConfirmDeleteModal'),
+
     modalHistoricalGraph: document.getElementById('modalHistoricalGraph'),
     graphHeaderIcon: document.getElementById('graphHeaderIcon'),
     graphModalTitle: document.getElementById('graphModalTitle'),
@@ -174,7 +196,6 @@
     btnSaveGreenhouse: document.getElementById('btnSaveGreenhouse'),
     inputGreenhouseName: document.getElementById('inputGreenhouseName'),
     inputGreenhouseId: document.getElementById('inputGreenhouseId'),
-    selectCropType: document.getElementById('selectCropType'),
 
     modalNotifications: document.getElementById('modalNotifications'),
     btnCloseNotifications: document.getElementById('btnCloseNotifications'),
@@ -193,6 +214,8 @@
       const saved = localStorage.getItem(STORAGE_KEYS.GREENHOUSES);
       if (saved) {
         state.greenhouses = JSON.parse(saved);
+        // Higieniza qualquer resquício de cultura/fruta antigo
+        state.greenhouses.forEach(g => { delete g.cultura; });
       } else {
         state.greenhouses = DEFAULT_GREENHOUSES;
         saveGreenhouses();
@@ -212,6 +235,10 @@
 
   function getActiveGreenhouse() {
     return state.greenhouses.find(g => g.id === state.activeGreenhouseId);
+  }
+
+  function getGreenhouseById(id) {
+    return state.greenhouses.find(g => g.id === id);
   }
 
   // =========================================================================================
@@ -299,7 +326,6 @@
       soil: parseInt(telemetria.umidade_solo, 10) || 0
     });
 
-    // Mantém no máximo os últimos 1500 registros para otimizar armazenamento
     if (history.length > 1500) {
       history = history.slice(-1500);
     }
@@ -318,7 +344,6 @@
     return [];
   }
 
-  // Gera dados simulados caso o histórico esteja vazio (para visualização imediata)
   function ensureSeedHistory(greenhouseId) {
     const readings = getHistoricalReadings(greenhouseId);
     if (readings.length > 0) return readings;
@@ -326,14 +351,13 @@
     const seed = [];
     const now = Date.now();
     const oneDay = 24 * 60 * 60 * 1000;
-    const interval = 30 * 60 * 1000; // cada 30 min
+    const interval = 30 * 60 * 1000;
 
     for (let t = now - oneDay; t <= now; t += interval) {
-      // Simula um período desligado (gap) de 3 horas durante a madrugada
       const date = new Date(t);
       const hour = date.getHours();
       if (hour >= 2 && hour <= 5) {
-        continue; // Deixa lacuna no período desligado!
+        continue; // Lacuna real para período desligado
       }
 
       seed.push({
@@ -351,7 +375,7 @@
   }
 
   // =========================================================================================
-  // RENDERIZAÇÃO DO GERENCIADOR DE ESTUFAS (LISTA ESTILO SMART LIFE)
+  // RENDERIZAÇÃO DO GERENCIADOR DE ESTUFAS COM GESTO DE LONG-PRESS E BOTÃO ⋮
   // =========================================================================================
 
   function renderGreenhousesList() {
@@ -374,14 +398,17 @@
           <div class="unit-avatar-box">
             <img src="assets/logo.png" alt="Estufa">
           </div>
-          <span class="unit-status-pill ${greenhouse.online ? 'online' : 'offline'}">
-            ${greenhouse.online ? '● Online' : '○ Offline'}
-          </span>
+          <div class="unit-top-actions">
+            <span class="unit-status-pill ${greenhouse.online ? 'online' : 'offline'}">
+              ${greenhouse.online ? '● Online' : '○ Offline'}
+            </span>
+            <button class="btn-card-more" aria-label="Opções da Estufa" title="Opções">⋮</button>
+          </div>
         </div>
 
         <div class="unit-info">
           <h3>${greenhouse.nome}</h3>
-          <span class="unit-crop-badge">🌱 ${getCropLabel(greenhouse.cultura)}</span>
+          <span class="unit-code-badge">ID: ${greenhouse.id}</span>
         </div>
 
         <div class="unit-metrics-summary">
@@ -400,27 +427,84 @@
         </div>
       `;
 
-      // Gestos: Toque Rápido vs Toque Longo (Press and Hold)
-      let touchTimer = null;
-      let isLongPress = false;
-
-      card.addEventListener('pointerdown', () => {
-        isLongPress = false;
-        touchTimer = setTimeout(() => {
-          isLongPress = true;
-          handleGreenhouseLongPress(greenhouse);
-        }, 650); // 650ms para acionar long press
+      // Botão de opções rápidas ⋮
+      const btnMore = card.querySelector('.btn-card-more');
+      btnMore.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openGreenhouseOptionsSheet(greenhouse.id);
       });
 
-      card.addEventListener('pointerup', () => {
-        clearTimeout(touchTimer);
-        if (!isLongPress) {
+      // --- RECONHECIMENTO DE TOQUE ROBUSTO (TOQUE RÁPIDO VS LONG-PRESS) ---
+      let pressTimer = null;
+      let startX = 0;
+      let startY = 0;
+      let isMoved = false;
+      let isLongPressed = false;
+
+      const startPress = (e) => {
+        isMoved = false;
+        isLongPressed = false;
+        const touch = e.touches ? e.touches[0] : e;
+        startX = touch.clientX;
+        startY = touch.clientY;
+
+        card.classList.add('pressing');
+
+        clearTimeout(pressTimer);
+        pressTimer = setTimeout(() => {
+          if (!isMoved) {
+            isLongPressed = true;
+            card.classList.remove('pressing');
+            if (navigator.vibrate) navigator.vibrate(50);
+            openGreenhouseOptionsSheet(greenhouse.id);
+          }
+        }, 480); // 480ms para disparar o Long Press instantâneo
+      };
+
+      const movePress = (e) => {
+        if (!pressTimer) return;
+        const touch = e.touches ? e.touches[0] : e;
+        const deltaX = Math.abs(touch.clientX - startX);
+        const deltaY = Math.abs(touch.clientY - startY);
+
+        // Se o usuário rolou a tela mais de 10px, cancela o timer
+        if (deltaX > 10 || deltaY > 10) {
+          isMoved = true;
+          clearTimeout(pressTimer);
+          card.classList.remove('pressing');
+        }
+      };
+
+      const endPress = (e) => {
+        clearTimeout(pressTimer);
+        card.classList.remove('pressing');
+
+        // Se não foi long-press e não arrastou a tela, foi um toque rápido normal:
+        if (!isLongPressed && !isMoved) {
+          // Ignora se o clique foi direto no botão de mais ⋮
+          if (e.target.closest('.btn-card-more')) return;
           openGreenhouseDetail(greenhouse.id);
         }
-      });
+      };
 
-      card.addEventListener('pointercancel', () => clearTimeout(touchTimer));
-      card.addEventListener('pointerleave', () => clearTimeout(touchTimer));
+      const cancelPress = () => {
+        clearTimeout(pressTimer);
+        card.classList.remove('pressing');
+      };
+
+      // Eventos Touch (Mobile)
+      card.addEventListener('touchstart', startPress, { passive: true });
+      card.addEventListener('touchmove', movePress, { passive: true });
+      card.addEventListener('touchend', endPress);
+      card.addEventListener('touchcancel', cancelPress);
+
+      // Eventos Mouse (Desktop / Emulador)
+      card.addEventListener('mousedown', (e) => {
+        if (e.button === 0) startPress(e);
+      });
+      card.addEventListener('mousemove', movePress);
+      card.addEventListener('mouseup', endPress);
+      card.addEventListener('mouseleave', cancelPress);
 
       dom.greenhousesGrid.appendChild(card);
     });
@@ -428,37 +512,82 @@
     dom.onlineCountBadge.textContent = `${onlineCount} Online`;
   }
 
-  function getCropLabel(cultura) {
-    const map = {
-      hortalicas: 'Hortaliças',
-      tomate: 'Tomateiro',
-      morango: 'Morango',
-      pimentao: 'Pimentão',
-      flores: 'Flores / Mudas'
-    };
-    return map[cultura] || 'Cultivo Geral';
+  // =========================================================================================
+  // BOTTOM SHEET DE OPÇÕES DA ESTUFA (SMART LIFE STYLE)
+  // =========================================================================================
+
+  function openGreenhouseOptionsSheet(greenhouseId) {
+    const greenhouse = getGreenhouseById(greenhouseId);
+    if (!greenhouse) return;
+
+    state.selectedOptionGreenhouseId = greenhouseId;
+    dom.optionsSheetTitle.textContent = greenhouse.nome;
+    dom.optionsSheetSubtitle.textContent = `Código: ${greenhouse.id} (${greenhouse.online ? 'Online' : 'Offline'})`;
+
+    dom.modalGreenhouseOptions.classList.remove('hidden');
   }
 
-  function handleGreenhouseLongPress(greenhouse) {
-    if (navigator.vibrate) navigator.vibrate(60);
-    const action = confirm(`Opções para "${greenhouse.nome}":\n\nDeseja excluir ou editar esta estufa?\n- Pressione OK para EXCLUIR\n- Pressione Cancelar para EDITAR O NOME`);
-    if (action) {
-      if (state.greenhouses.length <= 1) {
-        showToast('Você deve manter pelo menos uma estufa cadastrada.', 'error');
-        return;
-      }
-      state.greenhouses = state.greenhouses.filter(g => g.id !== greenhouse.id);
+  function closeGreenhouseOptionsSheet() {
+    dom.modalGreenhouseOptions.classList.add('hidden');
+  }
+
+  function handleOptionOpen() {
+    closeGreenhouseOptionsSheet();
+    if (state.selectedOptionGreenhouseId) {
+      openGreenhouseDetail(state.selectedOptionGreenhouseId);
+    }
+  }
+
+  function handleOptionEdit() {
+    closeGreenhouseOptionsSheet();
+    const greenhouse = getGreenhouseById(state.selectedOptionGreenhouseId);
+    if (!greenhouse) return;
+
+    dom.inputEditGreenhouseName.value = greenhouse.nome;
+    dom.modalEditGreenhouse.classList.remove('hidden');
+  }
+
+  function handleOptionDelete() {
+    closeGreenhouseOptionsSheet();
+    const greenhouse = getGreenhouseById(state.selectedOptionGreenhouseId);
+    if (!greenhouse) return;
+
+    if (state.greenhouses.length <= 1) {
+      showToast('Você deve manter pelo menos uma estufa cadastrada.', 'error');
+      return;
+    }
+
+    dom.deleteConfirmText.textContent = `Tem certeza que deseja excluir "${greenhouse.nome}" (${greenhouse.id})?`;
+    dom.modalConfirmDelete.classList.remove('hidden');
+  }
+
+  function confirmDeleteGreenhouse() {
+    const id = state.selectedOptionGreenhouseId;
+    const greenhouse = getGreenhouseById(id);
+    const nome = greenhouse ? greenhouse.nome : id;
+
+    state.greenhouses = state.greenhouses.filter(g => g.id !== id);
+    saveGreenhouses();
+
+    dom.modalConfirmDelete.classList.add('hidden');
+    renderGreenhousesList();
+    showToast(`Estufa "${nome}" excluída da lista.`, 'info');
+  }
+
+  function saveEditedGreenhouseName() {
+    const novoNome = dom.inputEditGreenhouseName.value.trim();
+    if (!novoNome) {
+      showToast('Informe um nome válido para a estufa.', 'error');
+      return;
+    }
+
+    const greenhouse = getGreenhouseById(state.selectedOptionGreenhouseId);
+    if (greenhouse) {
+      greenhouse.nome = novoNome;
       saveGreenhouses();
+      dom.modalEditGreenhouse.classList.add('hidden');
       renderGreenhousesList();
-      showToast(`Estufa "${greenhouse.nome}" excluída da lista.`, 'info');
-    } else {
-      const novoNome = prompt('Digite o novo nome para a estufa:', greenhouse.nome);
-      if (novoNome && novoNome.trim().length > 0) {
-        greenhouse.nome = novoNome.trim();
-        saveGreenhouses();
-        renderGreenhousesList();
-        showToast('Nome da estufa atualizado com sucesso!', 'success');
-      }
+      showToast('Nome da estufa atualizado com sucesso!', 'success');
     }
   }
 
@@ -494,8 +623,6 @@
 
     showView('detail');
     updateDetailViewUI(greenhouse.telemetria, greenhouse.online);
-
-    // Se o cliente MQTT já estiver rodando, assina os tópicos da estufa selecionada
     subscribeGreenhouseTopics(greenhouse.id);
   }
 
@@ -521,13 +648,13 @@
       dom.detailStatusDot.className = 'status-indicator-dot disconnected';
       dom.detailStatusText.textContent = 'Offline';
       dom.wifiCardTitle.textContent = 'Rede Sem Fio Desconectada';
-      dom.wifiCardSubtitle.textContent = 'Toque em Conectar para vincular o app à estufa';
+      dom.wifiCardSubtitle.textContent = 'Toque em Conectar para sincronizar com a estufa';
       dom.btnConnectionLabel.textContent = 'Conectar';
     }
 
     if (!data) return;
 
-    // 2. Umidade do Solo (Valores Ideais Agronômicos Reais: 60% a 80%)
+    // 2. Umidade do Solo (Valores Agronômicos Ideais: 60% a 80%)
     const soil = Math.max(0, Math.min(100, parseInt(data.umidade_solo, 10) || 0));
     dom.valSoil.textContent = soil;
     dom.soilBarFill.style.width = `${soil}%`;
@@ -578,7 +705,7 @@
       }
     }
 
-    // 5. Reservatório de Água (Amigável para o Agricultor)
+    // 5. Reservatório de Água (Amigável)
     const isWaterLow = (data.nivel_agua === 'BAIXO' || data.falta_agua === 1 || data.falta_agua === true);
     if (isWaterLow) {
       dom.valWaterLevel.textContent = 'NÍVEL CRÍTICO';
@@ -660,7 +787,6 @@
         state.isConnectingMqtt = false;
         showToast('Conectado à rede com sucesso!', 'success');
         
-        // Assina tópicos de todas as estufas cadastradas
         state.greenhouses.forEach(g => subscribeGreenhouseTopics(g.id));
 
         const active = getActiveGreenhouse();
@@ -722,7 +848,6 @@
       const greenhouse = state.greenhouses.find(g => g.id === greenhouseId);
       if (!greenhouse) return;
 
-      // 1. Mensagem de Status (Online / Offline)
       if (subtopic === 'status') {
         const isOnline = (data.status === 'online');
         greenhouse.online = isOnline;
@@ -731,21 +856,14 @@
         }
         renderGreenhousesList();
       }
-
-      // 2. Confirmação de Ação (ACK)
       else if (subtopic === 'ack') {
         handleActionAck(data);
       }
-
-      // 3. Telemetria dos Sensores
       else if (subtopic === 'telemetria') {
         greenhouse.online = true;
         greenhouse.telemetria = data;
 
-        // Salva leitura no banco de dados local
         recordHistoricalReading(greenhouse.id, data);
-
-        // Notificações Inteligentes
         checkIntelligentTriggers(greenhouse, data);
 
         if (greenhouse.id === state.activeGreenhouseId) {
@@ -758,28 +876,21 @@
     }
   }
 
-  // =========================================================================================
-  // GATILHOS DE NOTIFICAÇÕES INTELIGENTES
-  // =========================================================================================
-
   function checkIntelligentTriggers(greenhouse, data) {
     const soil = parseInt(data.umidade_solo, 10);
     const temp = parseFloat(data.temp);
     const faltaAgua = (data.nivel_agua === 'BAIXO' || data.falta_agua === 1);
 
-    // Alerta de Solo Seco com Bomba Ligando
     if (soil < 40 && data.bomba === 1 && (!greenhouse._lastAlertSolo || Date.now() - greenhouse._lastAlertSolo > 60000)) {
       greenhouse._lastAlertSolo = Date.now();
       addNotification(greenhouse.nome, 'Solo seco detectado. Ligando a bomba de água automaticamente.', 'info');
     }
 
-    // Alerta de Reservatório Vazio
     if (faltaAgua && (!greenhouse._lastAlertAgua || Date.now() - greenhouse._lastAlertAgua > 90000)) {
       greenhouse._lastAlertAgua = Date.now();
       addNotification(greenhouse.nome, 'Atenção: O reservatório de água está quase acabando!', 'danger');
     }
 
-    // Alerta de Temperatura Elevada com Ventoinha Ligando
     if (temp > 30.0 && data.ventoinha === 1 && (!greenhouse._lastAlertTemp || Date.now() - greenhouse._lastAlertTemp > 60000)) {
       greenhouse._lastAlertTemp = Date.now();
       addNotification(greenhouse.nome, 'Temperatura elevada na estufa. Acionando ventoinha.', 'warning');
@@ -816,19 +927,16 @@
     pending.waiting = true;
     pending.targetState = novoEstado;
 
-    // Timeout de 5 segundos se a estufa demorar sem responder
     clearTimeout(pending.timer);
     pending.timer = setTimeout(() => {
       if (pending.waiting) {
         pending.waiting = false;
         blockEl.classList.remove('waiting');
         showToast(`Tempo esgotado: A estufa não respondeu ao comando da ${atuador === 'bomba' ? 'Bomba' : 'Ventoinha'}.`, 'error');
-        // Mantém estado anterior
         if (greenhouse.telemetria) updateDetailViewUI(greenhouse.telemetria, greenhouse.online);
       }
     }, 5000);
 
-    // Envia comando via MQTT
     const payload = JSON.stringify({
       cmd: atuador,
       val: novoEstado,
@@ -838,7 +946,6 @@
     if (state.mqttClient && state.mqttClient.connected) {
       state.mqttClient.publish(`agrolink/${greenhouse.id}/comando`, payload);
     } else {
-      // Se estiver em modo de teste simulado, responde automaticamente após 600ms
       setTimeout(() => {
         handleActionAck({ ack: atuador, estado: novoEstado, status: 'ok' });
       }, 700);
@@ -928,7 +1035,6 @@
       return;
     }
 
-    // Filtro temporal (Dia = últimas 24h / Mês = últimos 30 dias)
     const now = Date.now();
     const periodMs = (state.currentGraphFilter === 'day') ? (24 * 60 * 60 * 1000) : (30 * 24 * 60 * 60 * 1000);
     readings = readings.filter(r => (now - r.t) <= periodMs);
@@ -952,8 +1058,7 @@
     dom.graphStatAvg.textContent = `${avgVal.toFixed(1)}${unit}`;
     dom.graphStatMax.textContent = `${maxVal.toFixed(1)}${unit}`;
 
-    // Faixas Agronômicas Ideais
-    let idealMin = 20, idealMax = 30; // Temperatura default
+    let idealMin = 20, idealMax = 30;
     if (metric === 'hum') { idealMin = 60; idealMax = 80; }
     if (metric === 'soil') { idealMin = 60; idealMax = 80; }
 
@@ -972,7 +1077,7 @@
       return padding.left + ((timestamp - startTime) / (endTime - startTime)) * chartW;
     };
 
-    // 1. Desenha Faixa Agronômica Ideal Sombreada
+    // 1. Faixa Agronômica Ideal Sombreada
     const yIdealTop = getY(idealMax);
     const yIdealBottom = getY(idealMin);
     ctx.fillStyle = 'rgba(16, 185, 129, 0.12)';
@@ -986,7 +1091,7 @@
     ctx.moveTo(padding.left, yIdealBottom);
     ctx.lineTo(padding.left + chartW, yIdealBottom);
     ctx.stroke();
-    ctx.setLineDash([]); // Reseta linha pontilhada
+    ctx.setLineDash([]);
 
     // 2. Linhas de Grade e Eixo Y
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
@@ -1003,10 +1108,8 @@
     ctx.fillText(`${((chartMax + chartMin) / 2).toFixed(0)}${unit}`, padding.left - 6, padding.top + chartH / 2);
     ctx.fillText(`${chartMin.toFixed(0)}${unit}`, padding.left - 6, padding.top + chartH);
 
-    // 3. Desenho da Linha com TRATAMENTO DE PERÍODOS DESLIGADOS (LACUNAS / OFFLINE)
-    // Se o intervalo entre duas leituras consecutivas for maior que 45 minutos, considera o sistema DESLIGADO!
+    // 3. Linha com Tratamento de Períodos Desligados (Offline)
     const MAX_GAP_MS = 45 * 60 * 1000;
-
     ctx.lineWidth = 2.5;
     ctx.strokeStyle = '#10b981';
 
@@ -1017,14 +1120,12 @@
       const x = getX(pt.t);
       const y = getY(pt[metric]);
 
-      // Verifica se houve lacuna (período offline) com o ponto anterior
       if (i > 0) {
         const gap = pt.t - readings[i - 1].t;
         if (gap > MAX_GAP_MS) {
-          // Finaliza o traçado do segmento anterior
           ctx.stroke();
 
-          // Desenha segmento pontilhado cinza indicando período offline!
+          // Segmento pontilhado para indicar período offline
           ctx.beginPath();
           ctx.setLineDash([3, 4]);
           ctx.strokeStyle = '#64748b';
@@ -1034,7 +1135,6 @@
           ctx.lineTo(x, y);
           ctx.stroke();
 
-          // Retoma linha sólida para o novo segmento online
           ctx.setLineDash([]);
           ctx.strokeStyle = '#10b981';
           isDrawingSegment = false;
@@ -1051,7 +1151,7 @@
     }
     if (isDrawingSegment) ctx.stroke();
 
-    // 4. Marcadores nos pontos finais
+    // Marcador final
     const lastPt = readings[readings.length - 1];
     const lastX = getX(lastPt.t);
     const lastY = getY(lastPt[metric]);
@@ -1075,16 +1175,15 @@
         const s = g.telemetria;
         if (!s) return;
 
-        // Variação suave dos sensores
         s.temp = +(24 + Math.random() * 2).toFixed(1);
         s.umidade_ar = Math.min(85, Math.max(50, s.umidade_ar + Math.round((Math.random() - 0.5) * 2)));
 
         if (s.bomba) {
           s.umidade_solo = Math.min(80, s.umidade_solo + 2);
-          if (s.umidade_solo >= 78) s.bomba = 0; // Desliga no ponto ideal!
+          if (s.umidade_solo >= 78) s.bomba = 0;
         } else {
           s.umidade_solo = Math.max(30, s.umidade_solo - 1);
-          if (s.auto_bomba && s.umidade_solo < 40) s.bomba = 1; // Liga quando solo seco!
+          if (s.auto_bomba && s.umidade_solo < 40) s.bomba = 1;
         }
 
         if (s.auto_ventoinha && s.temp > 30.0) s.ventoinha = 1;
@@ -1122,7 +1221,6 @@
     dom.btnSaveGreenhouse.addEventListener('click', () => {
       const name = dom.inputGreenhouseName.value.trim();
       const id = dom.inputGreenhouseId.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-      const crop = dom.selectCropType.value;
 
       if (!name || !id) {
         showToast('Preencha o nome e o código da estufa.', 'error');
@@ -1137,7 +1235,6 @@
       state.greenhouses.push({
         id,
         nome: name,
-        cultura: crop,
         online: false,
         telemetria: {
           temp: 25.0,
@@ -1157,6 +1254,22 @@
       showToast(`Estufa "${name}" adicionada com sucesso!`, 'success');
       subscribeGreenhouseTopics(id);
     });
+
+    // Ações do Bottom Sheet de Opções da Estufa
+    dom.btnSheetOpen.addEventListener('click', handleOptionOpen);
+    dom.btnSheetEdit.addEventListener('click', handleOptionEdit);
+    dom.btnSheetDelete.addEventListener('click', handleOptionDelete);
+    dom.btnSheetCancel.addEventListener('click', closeGreenhouseOptionsSheet);
+
+    // Modal de Edição de Nome
+    dom.btnCloseEditModal.addEventListener('click', () => dom.modalEditGreenhouse.classList.add('hidden'));
+    dom.btnCancelEditModal.addEventListener('click', () => dom.modalEditGreenhouse.classList.add('hidden'));
+    dom.btnSaveEditModal.addEventListener('click', saveEditedGreenhouseName);
+
+    // Modal de Confirmação de Exclusão
+    dom.btnCloseDeleteModal.addEventListener('click', () => dom.modalConfirmDelete.classList.add('hidden'));
+    dom.btnCancelDeleteModal.addEventListener('click', () => dom.modalConfirmDelete.classList.add('hidden'));
+    dom.btnConfirmDeleteModal.addEventListener('click', confirmDeleteGreenhouse);
 
     // Botão Tutorial de Conexão
     dom.btnOpenTutorial.addEventListener('click', () => dom.modalTutorial.classList.remove('hidden'));
@@ -1240,7 +1353,7 @@
       renderHistoricalChart();
     });
 
-    // Fechar modais ao clicar fora
+    // Fechar modais ao clicar no fundo escuro
     document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
       backdrop.addEventListener('click', (e) => {
         if (e.target === backdrop) backdrop.classList.add('hidden');
@@ -1251,7 +1364,6 @@
   function init() {
     loadGreenhouses();
 
-    // Recupera notificações salvas
     try {
       const notifs = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
       if (notifs) state.notifications = JSON.parse(notifs);
@@ -1259,11 +1371,7 @@
     renderNotificationsBadge();
 
     setupEventListeners();
-
-    // Inicia na visão da lista de estufas
     showView('list');
-
-    // Conecta automaticamente ao broker MQTT
     connectMqttBroker();
   }
 

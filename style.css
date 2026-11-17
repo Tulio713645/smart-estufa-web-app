@@ -1,5 +1,5 @@
 /* ==========================================================
-   AGROLINK - DESIGN SYSTEM DARK MODE OFICIAL
+   AGROLINK - DESIGN SYSTEM DARK MODE OFICIAL DEFINITIVO
    Identidade Visual: Verde Esmeralda, Neon e Mobile-First
    ========================================================== */
 
@@ -92,7 +92,7 @@ body {
 }
 
 /* ==========================================================
-   CABEÇALHO OFICIAL AGROLINK
+   CABEÇALHO OFICIAL AGROLINK (COM SUPORTE À BARRA DE STATUS)
    ========================================================== */
 .app-header {
   position: sticky;
@@ -102,9 +102,13 @@ body {
   z-index: 60;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  background: rgba(6, 16, 11, 0.88);
+  background: rgba(6, 16, 11, 0.92);
   border-bottom: 1px solid var(--border-green);
-  padding: 0.75rem 1rem;
+  /* Respeita o espaçamento da barra de status superior nativa */
+  padding-top: max(env(safe-area-inset-top), 0.75rem);
+  padding-bottom: 0.75rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .header-container {
@@ -286,29 +290,34 @@ body {
 
 /* Card Individual de Estufa no Dashboard */
 .greenhouse-card-unit {
-  background: var(--bg-surface);
+  background: linear-gradient(145deg, #102219 0%, #0a1711 100%);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  padding: 1.15rem;
+  border-radius: var(--radius-xl);
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 1rem;
   box-shadow: var(--shadow-card);
   cursor: pointer;
   position: relative;
   overflow: hidden;
   transition: all var(--transition-base);
   user-select: none;
+  -webkit-user-select: none;
 }
 
 .greenhouse-card-unit:hover {
   border-color: var(--border-green);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.55);
 }
 
-.greenhouse-card-unit:active {
-  transform: scale(0.98);
+/* Feedback tátil visual enquanto o usuário segura o dedo (Long Press) */
+.greenhouse-card-unit.pressing {
+  transform: scale(0.97);
+  border-color: var(--primary);
+  box-shadow: 0 0 20px var(--primary-glow);
+  background: linear-gradient(145deg, #162c20 0%, #0d2117 100%);
 }
 
 .unit-top-row {
@@ -317,9 +326,35 @@ body {
   justify-content: space-between;
 }
 
+.unit-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-card-more {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-card-more:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
 .unit-avatar-box {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
   background: #030a06;
   border: 1px solid var(--border-green);
@@ -338,7 +373,7 @@ body {
 .unit-status-pill {
   font-size: 0.6875rem;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 3px 9px;
   border-radius: var(--radius-full);
   display: flex;
   align-items: center;
@@ -358,14 +393,15 @@ body {
 }
 
 .unit-info h3 {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.125rem;
+  font-weight: 800;
   color: #ffffff;
 }
 
-.unit-crop-badge {
+.unit-code-badge {
   font-size: 0.7188rem;
-  color: var(--text-muted);
+  color: var(--text-dim);
+  font-family: monospace;
 }
 
 /* Métricas Resumidas do Card */
@@ -373,9 +409,9 @@ body {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
-  background: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.3);
   border-radius: var(--radius-md);
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.65rem;
   border: 1px solid var(--border-subtle);
 }
 
@@ -1153,6 +1189,124 @@ input:checked + .slider:before {
 }
 
 /* ==========================================================
+   BOTTOM SHEET MODAL: OPÇÕES DA ESTUFA (SMART LIFE STYLE)
+   ========================================================== */
+.bottom-sheet-card {
+  background: linear-gradient(180deg, #10241a 0%, #08140e 100%);
+  border: 1px solid var(--border-green);
+  border-bottom: none;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.75);
+  display: flex;
+  flex-direction: column;
+  padding: 1rem 1.25rem 2rem;
+  gap: 1.15rem;
+  animation: slideUp 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sheet-drag-handle {
+  width: 44px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-full);
+  align-self: center;
+  margin-bottom: 0.25rem;
+}
+
+.sheet-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.sheet-icon-box {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-md);
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  border: 1px solid var(--border-green);
+}
+
+.sheet-title-row h3 {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.sheet-title-row span {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+
+.sheet-actions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sheet-action-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 0.95rem 1.1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+  color: inherit;
+  font-family: inherit;
+}
+
+.sheet-action-btn:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--border-green);
+}
+
+.sheet-action-btn:active {
+  transform: scale(0.98);
+}
+
+.sheet-action-btn .btn-icon {
+  font-size: 1.35rem;
+  flex-shrink: 0;
+}
+
+.sheet-action-btn .btn-text strong {
+  display: block;
+  font-size: 0.9375rem;
+  color: #ffffff;
+}
+
+.sheet-action-btn .btn-text small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.sheet-action-btn.danger {
+  border-color: rgba(244, 63, 94, 0.3);
+}
+
+.sheet-action-btn.danger:hover {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: var(--danger);
+}
+
+.sheet-action-btn.danger .btn-text strong {
+  color: #fca5a5;
+}
+
+/* ==========================================================
    MODAL DE GRÁFICO HISTÓRICO
    ========================================================== */
 .graph-filter-bar {
@@ -1402,6 +1556,20 @@ input:checked + .slider:before {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-main);
   border: 1px solid var(--border-subtle);
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.btn-danger {
+  background: var(--danger);
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(244, 63, 94, 0.4);
+}
+
+.btn-danger:hover {
+  background: #e11d48;
 }
 
 .btn-block {

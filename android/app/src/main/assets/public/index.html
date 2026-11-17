@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#06120d">
+  <meta name="theme-color" content="#06100b">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AgroLink - Gestão Inteligente de Estufas</title>
@@ -75,7 +75,7 @@
       <div class="dashboard-banner">
         <div class="banner-text">
           <h2>Minhas Estufas</h2>
-          <p>Selecione uma unidade para monitorar ou gerenciar em tempo real.</p>
+          <p>Painel de controle e monitoramento agronômico centralizado.</p>
         </div>
         <div class="banner-stat">
           <span class="stat-count" id="onlineCountBadge">0 Online</span>
@@ -84,7 +84,7 @@
 
       <!-- Grid de Cards de Estufas Cadastradas -->
       <div class="greenhouses-grid" id="greenhousesGrid">
-        <!-- Renderizado dinamicamente pelo JavaScript -->
+        <!-- Renderizado dinamicamente pelo JavaScript com suporte a Long Press e botão ⋮ -->
       </div>
 
       <!-- Dica Rápida de Interação -->
@@ -94,7 +94,7 @@
           <line x1="12" y1="16" x2="12" y2="12"></line>
           <line x1="12" y1="8" x2="12.01" y2="8"></line>
         </svg>
-        <span><strong>Dica:</strong> Toque rápido para abrir. Segure o dedo em uma estufa para <strong>Editar</strong> ou <strong>Excluir</strong>.</span>
+        <span>Toque no bloco para monitorar. <strong>Segure o dedo</strong> ou toque em <strong>⋮</strong> para opções de <strong>Editar</strong> ou <strong>Excluir</strong>.</span>
       </div>
     </div>
   </section>
@@ -115,7 +115,7 @@
         </button>
 
         <div class="detail-title-group">
-          <h2 class="active-greenhouse-title" id="activeGreenhouseName">Estufa Alpha</h2>
+          <h2 class="active-greenhouse-title" id="activeGreenhouseName">Estufa 1</h2>
           <span class="device-id-tag" id="activeGreenhouseId">ID: estufa_01</span>
         </div>
 
@@ -217,7 +217,7 @@
 
               <span class="cube-label">Bomba de Água</span>
               <span class="cube-state-badge" id="pumpStateBadge">DESLIGADA</span>
-              <span class="cube-waiting-text" id="pumpWaitingText">Aguardando estufa...</span>
+              <span class="cube-waiting-text" id="pumpWaitingText">Aguardando confirmação...</span>
             </button>
 
             <!-- Chave de Controle Automático da Bomba -->
@@ -310,7 +310,7 @@
 
               <span class="cube-label">Ventoinha (Cooler)</span>
               <span class="cube-state-badge" id="fanStateBadge">DESLIGADA</span>
-              <span class="cube-waiting-text" id="fanWaitingText">Aguardando estufa...</span>
+              <span class="cube-waiting-text" id="fanWaitingText">Aguardando confirmação...</span>
             </button>
 
             <!-- Chave de Controle Automático da Ventoinha -->
@@ -470,7 +470,7 @@
   </div>
 
   <!-- =========================================================================
-       MODAL 3: ADICIONAR / EDITAR ESTUFA
+       MODAL 3: ADICIONAR NOVA ESTUFA (SEM CLASSIFICAÇÃO DE FRUTAS)
        ========================================================================= -->
   <div class="modal-backdrop hidden" id="modalAddGreenhouse" role="dialog" aria-modal="true" aria-labelledby="addGreenhouseTitle">
     <div class="modal-card">
@@ -488,27 +488,16 @@
       <div class="modal-body">
         <div class="form-group">
           <label for="inputGreenhouseName">Nome da Estufa</label>
-          <input type="text" id="inputGreenhouseName" class="form-input" placeholder="Ex: Estufa 1 - Tomates">
+          <input type="text" id="inputGreenhouseName" class="form-input" placeholder="Ex: Estufa Principal, Estufa Sul">
         </div>
 
         <div class="form-group">
-          <label for="inputGreenhouseId">Código / ID Único do Adaptador</label>
+          <label for="inputGreenhouseId">Código / ID de Comunicação do Adaptador</label>
           <div class="input-with-prefix">
             <span class="input-prefix">agrolink/</span>
             <input type="text" id="inputGreenhouseId" placeholder="estufa_01">
           </div>
-          <small class="form-help">Mesmo identificador configurado no ESP-12E.</small>
-        </div>
-
-        <div class="form-group">
-          <label for="selectCropType">Tipo de Cultivo / Plantação</label>
-          <select id="selectCropType" class="form-select">
-            <option value="hortalicas">🥬 Hortaliças em Geral</option>
-            <option value="tomate">🍅 Tomateiro</option>
-            <option value="morango">🍓 Morango</option>
-            <option value="pimentao">🫑 Pimentão</option>
-            <option value="flores">🌸 Flores e Mudas</option>
-          </select>
+          <small class="form-help">Mesmo código configurado no ESP-12E desta estufa.</small>
         </div>
       </div>
 
@@ -541,6 +530,99 @@
 
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="btnClearNotifications">Limpar Avisos</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 5: BOTTOM SHEET DE OPÇÕES DA ESTUFA (LONG-PRESS & BOTÃO ⋮)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalGreenhouseOptions" role="dialog" aria-modal="true">
+    <div class="bottom-sheet-card">
+      <div class="sheet-drag-handle"></div>
+      <div class="sheet-header">
+        <div class="sheet-title-row">
+          <div class="sheet-icon-box">🌱</div>
+          <div>
+            <h3 id="optionsSheetTitle">Estufa 1</h3>
+            <span id="optionsSheetSubtitle">Código: estufa_01</span>
+          </div>
+        </div>
+      </div>
+      <div class="sheet-actions-list">
+        <button class="sheet-action-btn" id="btnSheetOpen">
+          <span class="btn-icon">📲</span>
+          <div class="btn-text">
+            <strong>Abrir Monitoramento</strong>
+            <small>Acessar painel de sensores e controles em tempo real</small>
+          </div>
+        </button>
+
+        <button class="sheet-action-btn" id="btnSheetEdit">
+          <span class="btn-icon">✏️</span>
+          <div class="btn-text">
+            <strong>Editar Nome da Estufa</strong>
+            <small>Alterar a identificação no aplicativo</small>
+          </div>
+        </button>
+
+        <button class="sheet-action-btn danger" id="btnSheetDelete">
+          <span class="btn-icon">🗑️</span>
+          <div class="btn-text">
+            <strong>Excluir Estufa</strong>
+            <small>Remover esta unidade do aplicativo</small>
+          </div>
+        </button>
+      </div>
+      <div class="sheet-footer">
+        <button class="btn btn-secondary btn-block" id="btnSheetCancel">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 6: EDITAR NOME DA ESTUFA (CUSTOMIZADO)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalEditGreenhouse" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span>✏️</span>
+          <h3>Editar Nome da Estufa</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseEditModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="inputEditGreenhouseName">Nome da Estufa</label>
+          <input type="text" id="inputEditGreenhouseName" class="form-input">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelEditModal">Cancelar</button>
+        <button type="button" class="btn btn-primary" id="btnSaveEditModal">Salvar Nome</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 7: CONFIRMAR EXCLUSÃO DE ESTUFA (CUSTOMIZADO)
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalConfirmDelete" role="dialog" aria-modal="true">
+    <div class="modal-card modal-confirm-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <span style="color: var(--danger); font-size: 1.2rem;">⚠️</span>
+          <h3>Excluir Estufa</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseDeleteModal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="deleteConfirmText">Tem certeza que deseja excluir esta estufa da sua lista?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" id="btnCancelDeleteModal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="btnConfirmDeleteModal">Excluir Estufa</button>
       </div>
     </div>
   </div>
