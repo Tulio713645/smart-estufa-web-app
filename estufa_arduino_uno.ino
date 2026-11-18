@@ -17,19 +17,6 @@
  *  - Pino 11: Buzzer Piezoelétrico (Alertas de nível crítico e confirmações sonoras)
  *  - Pino 13: Relé / Driver da Ventoinha (Controle de temperatura do ar)
  *  - Pinos A4 (SDA) e A5 (SCL): Display LCD 16x2 I2C no endereço 0x27
- * 
- * Funcionalidades Integradas:
- *  1. Comunicação Serial Bluetooth bidirecional em formato JSON e comandos de terminal.
- *  2. Monitoramento em tempo real do status de pareamento pelo pino 8 (STATE).
- *  3. Sistema de Log Offline na memória interna (RAM buffer estilo Smartwatch):
- *     - Enquanto desconectado (Pino 8 LOW), grava leituras periódicas com compactação.
- *     - Assim que o celular reconectar (Pino 8 HIGH ou comando sync), descarrega todo
- *       o lote acumulado para preencher os gráficos históricos do aplicativo.
- *  4. Medição contínua do reservatório de água via sensor ultrassônico (0% a 100%).
- *  5. Trava de segurança ativa da bomba: NUNCA aciona se o reservatório estiver crítico.
- *  6. Automação agronômica independente para solo e temperatura com override manual.
- *  7. Display LCD 16x2 com ícone personalizado de Bluetooth e alternância de telas.
- *  8. Proteção Watchdog Timer de 8 segundos contra travamentos.
  * =========================================================================================
  */
 
@@ -87,7 +74,6 @@ const float TEMP_IDEAL_MAX = 30.0;        // >30°C estresse térmico -> liga ve
 const float TEMP_IDEAL_MIN = 27.0;        // <=27°C resfriamento concluído -> desliga
 
 // Calibração do reservatório com sensor ultrassônico
-// Mede a distância entre o sensor (no topo) e a superfície da água
 const int DIST_RES_CHEIO_CM = 4;          // 4 cm do sensor = Reservatório 100% cheio
 const int DIST_RES_VAZIO_CM = 25;         // 25 cm do sensor = Reservatório vazio (0%)
 const int NIVEL_AGUA_CRITICO_PCT = 15;    // <=15% de água é nível crítico: trava de segurança!
@@ -103,8 +89,6 @@ struct RegistroOffline {
   uint8_t ventoinha : 1;   // Estado da Ventoinha (0 ou 1)
 };
 
-// Buffer de memória para registros offline (estilo smartwatch)
-// 70 registros x 6 bytes = 420 bytes de RAM (muito seguro para os 2048 bytes do ATmega328P)
 const int MAX_REGISTROS_OFFLINE = 70;
 RegistroOffline bufferOffline[MAX_REGISTROS_OFFLINE];
 int totalRegistrosOffline = 0;
@@ -127,11 +111,11 @@ bool faltaAgua = false;
 bool bombaLigada = false;
 bool ventoinhaLigada = false;
 
-// Chaves de controle automático (ajustáveis pelo aplicativo)
+// Chaves de controle automático
 bool autoBomba = true;
 bool autoVentoinha = true;
 
-// Estado de conexão Bluetooth (monitorado pelo pino 8)
+// Estado de conexão Bluetooth (filtrado do pino 8)
 bool bluetoothConectado = false;
 bool bluetoothEstavaConectado = false;
 
@@ -146,10 +130,29 @@ unsigned long ultimoTempoLCD = 0;
 const unsigned long tempoExibicaoTela = 3000;     // Alterna telas do LCD a cada 3s
 int telaAtual = 1;
 
+// Gerenciamento de mensagens não-bloqueantes no LCD
+unsigned long tempoExpiracaoMensagemLCD = 0;
+char linhaTemp0[17] = "";
+char linhaTemp1[17] = "";
+bool exibindoMensagemTemp = false;
+
 unsigned long ultimoAlertaBuzzer = 0;
 
-// Buffer de recepção serial de comandos
-String bufferSerial = "";
+// Buffer de recepção serial
+String bufferBT = "";
+String bufferUSB = "";
+
+// =========================================================================================
+// DECLARAÇÃO ANTECIPADA DE FUNÇÕES
+// =========================================================================================
+void acionarBomba(bool ligar, const char* motivo = "");
+void acionarVentoinha(bool ligar, const char* motivo = "");
+void enviarConfirmacao(const char* atuador, int estado, const char* status);
+void enviarTelemetria();
+void descarregarLoteOfflineParaApp();
+void verificarComandosSeriais();
+void processarComando(String cmd);
+void exibirMensagemRapida(const char* l0, const char* l1);
 
 // =========================================================================================
 // PADRÕES DE ALARME SONORO (BUZZER - PINO 11)
@@ -186,11 +189,9 @@ long medirDistanciaUltrassom() {
   delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  // Timeout de 25ms (~4.2 metros max) para não travar o loop
   long duracao = pulseIn(PIN_ECHO, HIGH, 25000);
-  if (duracao == 0) return -1; // Sem eco / fora de alcance
+  if (duracao == 0) return -1;
 
-  // Cálculo: velocidade do som = 343 m/s = 0.0343 cm/us (ida e volta / 2)
   long distCm = duracao * 0.0343 / 2;
   return distCm;
 }
@@ -199,15 +200,13 @@ void atualizarNivelAgua() {
   long d = medirDistanciaUltrassom();
   if (d > 0 && d < 100) {
     distanciaUltrassomCm = d;
-    // Mapeia a distância: quanto mais próximo da água, maior o percentual
     long pct = map(distanciaUltrassomCm, DIST_RES_VAZIO_CM, DIST_RES_CHEIO_CM, 0, 100);
     nivelAguaPorcento = constrain((int)pct, 0, 100);
   }
 
-  // Trava de segurança: se o nível estiver crítico, ativa a flag de falta de água
+  // Trava de segurança: se o nível estiver crítico, ativa falta de água
   faltaAgua = (nivelAguaPorcento <= NIVEL_AGUA_CRITICO_PCT);
 
-  // Se a água acabar enquanto a bomba estiver ligada, corta IMEDIATAMENTE a bomba
   if (faltaAgua && bombaLigada) {
     acionarBomba(false, "TravaSegurancaAguaAcabou");
   }
@@ -217,9 +216,7 @@ void atualizarNivelAgua() {
 // CONTROLE DOS ATUADORES COM TRAVA DE SEGURANÇA
 // =========================================================================================
 
-void acionarBomba(bool ligar, const char* motivo = "") {
-  // TRAVA DE SEGURANÇA CRÍTICA:
-  // Se o nível de água medido pelo ultrassônico estiver crítico, a bomba NUNCA liga!
+void acionarBomba(bool ligar, const char* motivo) {
   if (ligar && faltaAgua) {
     digitalWrite(PIN_BOMBA, LOW);
     bombaLigada = false;
@@ -233,7 +230,7 @@ void acionarBomba(bool ligar, const char* motivo = "") {
   enviarConfirmacao("bomba", bombaLigada ? 1 : 0, "ok");
 }
 
-void acionarVentoinha(bool ligar, const char* motivo = "") {
+void acionarVentoinha(bool ligar, const char* motivo) {
   digitalWrite(PIN_VENTOINHA, ligar ? HIGH : LOW);
   ventoinhaLigada = ligar;
   enviarConfirmacao("ventoinha", ventoinhaLigada ? 1 : 0, "ok");
@@ -244,31 +241,29 @@ void acionarVentoinha(bool ligar, const char* motivo = "") {
 // =========================================================================================
 
 void enviarTelemetria() {
-  // Payload JSON completo compatível com o Aplicativo AgroLink e com Serial Bluetooth Terminal
-  String json = F("{"temp":");
+  String json = F("{\"temp\":");
   json += String(temperatura, 1);
-  json += F(","umidade_ar":");
+  json += F(",\"umidade_ar\":");
   json += String((int)umidadeAr);
-  json += F(","umidade_solo":");
+  json += F(",\"umidade_solo\":");
   json += String(umidadeSoloPorcento);
-  json += F(","nivel_agua":");
+  json += F(",\"nivel_agua\":");
   json += String(nivelAguaPorcento);
-  json += F(","status_agua":"");
+  json += F(",\"status_agua\":\"");
   json += faltaAgua ? F("BAIXO") : F("OK");
-  json += F("","dist_cm":");
+  json += F("\",\"dist_cm\":");
   json += String(distanciaUltrassomCm);
-  json += F(","bomba":");
+  json += F(",\"bomba\":");
   json += String(bombaLigada ? 1 : 0);
-  json += F(","ventoinha":");
+  json += F(",\"ventoinha\":");
   json += String(ventoinhaLigada ? 1 : 0);
-  json += F(","auto_bomba":");
+  json += F(",\"auto_bomba\":");
   json += String(autoBomba ? 1 : 0);
-  json += F(","auto_ventoinha":");
+  json += F(",\"auto_ventoinha\":");
   json += String(autoVentoinha ? 1 : 0);
-  json += F(","bt_online":");
+  json += F(",\"bt_online\":");
   json += String(bluetoothConectado ? 1 : 0);
-  json += F("}
-");
+  json += F("}\n");
 
   btSerial.print(json);
   Serial.print(F("[BT TELEMETRIA] "));
@@ -276,14 +271,13 @@ void enviarTelemetria() {
 }
 
 void enviarConfirmacao(const char* atuador, int estado, const char* status) {
-  String ack = F("{"ack":"");
+  String ack = F("{\"ack\":\"");
   ack += atuador;
-  ack += F("","estado":");
+  ack += F("\",\"estado\":");
   ack += String(estado);
-  ack += F(","status":"");
+  ack += F(",\"status\":\"");
   ack += status;
-  ack += F(""}
-");
+  ack += F("\"}\n");
 
   btSerial.print(ack);
   Serial.print(F("[BT ACK] "));
@@ -291,7 +285,7 @@ void enviarConfirmacao(const char* atuador, int estado, const char* status) {
 }
 
 // =========================================================================================
-// SISTEMA DE SINCRONIZAÇÃO OFFLINE (ESTILO SMARTWATCH)
+// SISTEMA DE LOG OFFLINE E SINCRONIZAÇÃO EM LOTE
 // =========================================================================================
 
 void gravarRegistroOffline() {
@@ -299,7 +293,6 @@ void gravarRegistroOffline() {
     totalRegistrosOffline++;
   }
 
-  // Grava no índice circular
   RegistroOffline &reg = bufferOffline[indiceGravacaoOffline];
   
   unsigned long segundosPassados = (millis() - tempoInicioOffline) / 1000;
@@ -313,72 +306,73 @@ void gravarRegistroOffline() {
 
   indiceGravacaoOffline = (indiceGravacaoOffline + 1) % MAX_REGISTROS_OFFLINE;
 
-  Serial.print(F("[LOG OFFLINE] Registro gravado na RAM. Total acumulado: "));
+  Serial.print(F("[LOG OFFLINE] Registro gravado na RAM. Total: "));
   Serial.println(totalRegistrosOffline);
 }
 
 void descarregarLoteOfflineParaApp() {
   if (totalRegistrosOffline == 0) {
-    Serial.println(F("[SYNC] Nenhum dado offline pendente."));
+    Serial.println(F("[SYNC] Nenhum dado offline acumulado."));
+    enviarTelemetria();
     return;
   }
 
   Serial.print(F("[SYNC] Descarregando lote de "));
   Serial.print(totalRegistrosOffline);
-  Serial.println(F(" leituras offline para o celular..."));
+  Serial.println(F(" leituras offline para o aplicativo..."));
 
-  // 1. Notifica início da sincronização com contagem total
-  btSerial.print(F("{"sync_start":"));
+  // 1. Notifica início da sincronização
+  btSerial.print(F("{\"sync_start\":"));
   btSerial.print(totalRegistrosOffline);
   btSerial.println(F("}"));
-  delay(30);
+  delay(25);
 
-  // Calcula o índice inicial no buffer circular
   int inicio = (indiceGravacaoOffline - totalRegistrosOffline + MAX_REGISTROS_OFFLINE) % MAX_REGISTROS_OFFLINE;
   unsigned long agora = millis();
   unsigned long duracaoOfflineSegundos = (agora - tempoInicioOffline) / 1000;
 
   // 2. Transmite cada registro offline linha a linha
   for (int i = 0; i < totalRegistrosOffline; i++) {
-    wdt_reset(); // Alimenta o watchdog durante o streaming
+    wdt_reset();
+
+    // Processa comandos seriais que possam chegar durante o streaming (evita travar botões!)
+    verificarComandosSeriais();
+
     int idx = (inicio + i) % MAX_REGISTROS_OFFLINE;
     RegistroOffline &r = bufferOffline[idx];
 
-    // Calcula quantos segundos atrás ocorreu este registro
     uint16_t segundosAtras = 0;
     if (duracaoOfflineSegundos > r.offsetSegundos) {
       segundosAtras = duracaoOfflineSegundos - r.offsetSegundos;
     }
 
-    String item = F("{"sync_item":{"t_offset":");
+    String item = F("{\"sync_item\":{\"t_offset\":");
     item += String(segundosAtras);
-    item += F(","temp":");
+    item += F(",\"temp\":");
     item += String(r.temp);
-    item += F(","umidade_ar":");
+    item += F(",\"umidade_ar\":");
     item += String(r.umidAr);
-    item += F(","umidade_solo":");
+    item += F(",\"umidade_solo\":");
     item += String(r.umidSolo);
-    item += F(","nivel_agua":");
+    item += F(",\"nivel_agua\":");
     item += String(r.nivelAgua);
-    item += F(","bomba":");
+    item += F(",\"bomba\":");
     item += String(r.bomba);
-    item += F(","ventoinha":");
+    item += F(",\"ventoinha\":");
     item += String(r.ventoinha);
-    item += F("}}
-");
+    item += F("}}\n");
 
     btSerial.print(item);
-    delay(20); // Pausa suave para evitar estouro de buffer serial no celular
+    delay(15);
   }
 
   // 3. Notifica conclusão da sincronização
-  btSerial.print(F("{"sync_end":true,"count":"));
+  btSerial.print(F("{\"sync_end\":true,\"count\":"));
   btSerial.print(totalRegistrosOffline);
   btSerial.println(F("}"));
 
   Serial.println(F("[SYNC] Sincronizacao offline concluida com sucesso!"));
 
-  // Limpa o buffer após o descarregamento
   totalRegistrosOffline = 0;
   indiceGravacaoOffline = 0;
 
@@ -386,85 +380,175 @@ void descarregarLoteOfflineParaApp() {
 }
 
 // =========================================================================================
-// PROCESSAMENTO DE COMANDOS RECEBIDOS VIA BLUETOOTH / TERMINAL
+// PROCESSAMENTO ROBUSTO DE COMANDOS (JSON, TEXTO E CÓDIGOS CURTOS)
 // =========================================================================================
+
+void verificarComandosSeriais() {
+  while (btSerial.available() > 0) {
+    char c = btSerial.read();
+    if (c == '\n' || c == '\r') {
+      if (bufferBT.length() > 0) {
+        processarComando(bufferBT);
+        bufferBT = "";
+      }
+    } else if (bufferBT.length() < 96) {
+      bufferBT += c;
+    }
+  }
+
+  while (Serial.available() > 0) {
+    char c = Serial.read();
+    if (c == '\n' || c == '\r') {
+      if (bufferUSB.length() > 0) {
+        processarComando(bufferUSB);
+        bufferUSB = "";
+      }
+    } else if (bufferUSB.length() < 96) {
+      bufferUSB += c;
+    }
+  }
+}
 
 void processarComando(String cmd) {
   cmd.trim();
   if (cmd.length() == 0) return;
 
-  Serial.print(F("[CMD BT RECEBIDO] "));
+  Serial.print(F("[CMD RECEBIDO] "));
   Serial.println(cmd);
 
-  soarBipeCurto(); // Feedback sonoro de comando recebido
+  soarBipeCurto();
 
-  // Comando: Ligar / Desligar Bomba (JSON ou Terminal Texto)
-  if (cmd.indexOf(""cmd":"bomba"") >= 0 || cmd.indexOf("bomba_on") >= 0 || cmd.indexOf("bomba_1") >= 0 || cmd.indexOf("bomba_toggle") >= 0) {
-    if (cmd.indexOf(""val":1") >= 0 || cmd.indexOf("bomba_on") >= 0 || cmd.indexOf("bomba_1") >= 0 || (!bombaLigada && cmd.indexOf("bomba_toggle") >= 0)) {
+  // --- 1. COMANDO BOMBA D'ÁGUA (PINO 10) ---
+  // Reconhece: B1, B0, B, bomba_on, bomba_off, bomba_toggle, {"cmd":"bomba","val":1}, etc.
+  if (cmd.equalsIgnoreCase("B1") || cmd.equalsIgnoreCase("bomba_on") || cmd.equalsIgnoreCase("bomba_1") ||
+      (cmd.indexOf("\"cmd\":\"bomba\"") >= 0 && cmd.indexOf("\"val\":1") >= 0) ||
+      (cmd.indexOf("bomba") >= 0 && (cmd.indexOf("1") >= 0 || cmd.indexOf("on") >= 0 || cmd.indexOf("ON") >= 0))) {
+    if (!faltaAgua) {
+      acionarBomba(true, "AppBT");
+      exibirMensagemRapida("Comando BT:", "Bomba LIGADA!");
+    } else {
+      exibirMensagemRapida("BLOQUEADO!", "Res. Sem Agua!");
+      enviarConfirmacao("bomba", 0, "bloqueado_sem_agua");
+    }
+  }
+  else if (cmd.equalsIgnoreCase("B0") || cmd.equalsIgnoreCase("bomba_off") || cmd.equalsIgnoreCase("bomba_0") ||
+           (cmd.indexOf("\"cmd\":\"bomba\"") >= 0 && cmd.indexOf("\"val\":0") >= 0) ||
+           (cmd.indexOf("bomba") >= 0 && (cmd.indexOf("0") >= 0 || cmd.indexOf("off") >= 0 || cmd.indexOf("OFF") >= 0))) {
+    acionarBomba(false, "AppBT");
+    exibirMensagemRapida("Comando BT:", "Bomba DESLIGADA");
+  }
+  else if (cmd.equalsIgnoreCase("B") || cmd.equalsIgnoreCase("bomba_toggle") || (cmd.indexOf("bomba") >= 0 && cmd.indexOf("toggle") >= 0)) {
+    if (!bombaLigada) {
       if (!faltaAgua) {
-        acionarBomba(true, "AppBluetooth");
+        acionarBomba(true, "AppBT");
         exibirMensagemRapida("Comando BT:", "Bomba LIGADA!");
       } else {
         exibirMensagemRapida("BLOQUEADO!", "Res. Sem Agua!");
+        enviarConfirmacao("bomba", 0, "bloqueado_sem_agua");
       }
     } else {
-      acionarBomba(false, "AppBluetooth");
+      acionarBomba(false, "AppBT");
       exibirMensagemRapida("Comando BT:", "Bomba DESLIGADA");
     }
   }
-  else if (cmd.indexOf("bomba_off") >= 0 || cmd.indexOf("bomba_0") >= 0 || (cmd.indexOf(""cmd":"bomba"") >= 0 && cmd.indexOf(""val":0") >= 0)) {
-    acionarBomba(false, "AppBluetooth");
-    exibirMensagemRapida("Comando BT:", "Bomba DESLIGADA");
+
+  // --- 2. COMANDO VENTOINHA (PINO 13) ---
+  // Reconhece: V1, V0, V, ventoinha_on, ventoinha_off, {"cmd":"ventoinha","val":1}, etc.
+  else if (cmd.equalsIgnoreCase("V1") || cmd.equalsIgnoreCase("ventoinha_on") || cmd.equalsIgnoreCase("ventoinha_1") ||
+           (cmd.indexOf("\"cmd\":\"ventoinha\"") >= 0 && cmd.indexOf("\"val\":1") >= 0) ||
+           (cmd.indexOf("ventoinha") >= 0 && (cmd.indexOf("1") >= 0 || cmd.indexOf("on") >= 0 || cmd.indexOf("ON") >= 0))) {
+    acionarVentoinha(true, "AppBT");
+    exibirMensagemRapida("Comando BT:", "Ventoinha LIGADA");
   }
-  // Comando: Ligar / Desligar Ventoinha
-  else if (cmd.indexOf(""cmd":"ventoinha"") >= 0 || cmd.indexOf("ventoinha_on") >= 0 || cmd.indexOf("ventoinha_1") >= 0 || cmd.indexOf("ventoinha_toggle") >= 0) {
-    if (cmd.indexOf(""val":1") >= 0 || cmd.indexOf("ventoinha_on") >= 0 || cmd.indexOf("ventoinha_1") >= 0 || (!ventoinhaLigada && cmd.indexOf("ventoinha_toggle") >= 0)) {
-      acionarVentoinha(true, "AppBluetooth");
-      exibirMensagemRapida("Comando BT:", "Ventoinha LIGADA");
-    } else {
-      acionarVentoinha(false, "AppBluetooth");
-      exibirMensagemRapida("Comando BT:", "Ventoinha DESL.");
-    }
-  }
-  else if (cmd.indexOf("ventoinha_off") >= 0 || cmd.indexOf("ventoinha_0") >= 0 || (cmd.indexOf(""cmd":"ventoinha"") >= 0 && cmd.indexOf(""val":0") >= 0)) {
-    acionarVentoinha(false, "AppBluetooth");
+  else if (cmd.equalsIgnoreCase("V0") || cmd.equalsIgnoreCase("ventoinha_off") || cmd.equalsIgnoreCase("ventoinha_0") ||
+           (cmd.indexOf("\"cmd\":\"ventoinha\"") >= 0 && cmd.indexOf("\"val\":0") >= 0) ||
+           (cmd.indexOf("ventoinha") >= 0 && (cmd.indexOf("0") >= 0 || cmd.indexOf("off") >= 0 || cmd.indexOf("OFF") >= 0))) {
+    acionarVentoinha(false, "AppBT");
     exibirMensagemRapida("Comando BT:", "Ventoinha DESL.");
   }
-  // Comando: Alternar Automático da Bomba
-  else if (cmd.indexOf(""cmd":"auto_bomba"") >= 0 || cmd.indexOf("auto_bomba_") >= 0) {
-    autoBomba = (cmd.indexOf(""val":1") >= 0 || cmd.indexOf("auto_bomba_on") >= 0 || cmd.indexOf("auto_bomba_1") >= 0);
-    enviarConfirmacao("auto_bomba", autoBomba ? 1 : 0, "ok");
-    exibirMensagemRapida("Auto Bomba:", autoBomba ? "ATIVADO" : "DESATIVADO");
+  else if (cmd.equalsIgnoreCase("V") || cmd.equalsIgnoreCase("ventoinha_toggle") || (cmd.indexOf("ventoinha") >= 0 && cmd.indexOf("toggle") >= 0)) {
+    acionarVentoinha(!ventoinhaLigada, "AppBT");
+    exibirMensagemRapida("Comando BT:", ventoinhaLigada ? "Ventoinha LIGADA" : "Ventoinha DESL.");
   }
-  // Comando: Alternar Automático da Ventoinha
-  else if (cmd.indexOf(""cmd":"auto_ventoinha"") >= 0 || cmd.indexOf("auto_ventoinha_") >= 0) {
-    autoVentoinha = (cmd.indexOf(""val":1") >= 0 || cmd.indexOf("auto_ventoinha_on") >= 0 || cmd.indexOf("auto_ventoinha_1") >= 0);
-    enviarConfirmacao("auto_ventoinha", autoVentoinha ? 1 : 0, "ok");
-    exibirMensagemRapida("Auto Ventoinha:", autoVentoinha ? "ATIVADO" : "DESATIVADO");
+
+  // --- 3. COMANDOS DE AUTOMÁTICO ---
+  else if (cmd.equalsIgnoreCase("A1") || cmd.equalsIgnoreCase("auto_bomba_1") || cmd.equalsIgnoreCase("auto_bomba_on") ||
+           (cmd.indexOf("auto_bomba") >= 0 && (cmd.indexOf("1") >= 0 || cmd.indexOf("true") >= 0))) {
+    autoBomba = true;
+    enviarConfirmacao("auto_bomba", 1, "ok");
+    exibirMensagemRapida("Auto Bomba:", "ATIVADO");
   }
-  // Comando: Solicitar Sincronização de Dados Offline
-  else if (cmd.indexOf(""cmd":"sync"") >= 0 || cmd.indexOf("sync") >= 0) {
+  else if (cmd.equalsIgnoreCase("A0") || cmd.equalsIgnoreCase("auto_bomba_0") || cmd.equalsIgnoreCase("auto_bomba_off") ||
+           (cmd.indexOf("auto_bomba") >= 0 && (cmd.indexOf("0") >= 0 || cmd.indexOf("false") >= 0))) {
+    autoBomba = false;
+    enviarConfirmacao("auto_bomba", 0, "ok");
+    exibirMensagemRapida("Auto Bomba:", "DESATIVADO");
+  }
+  else if (cmd.equalsIgnoreCase("C1") || cmd.equalsIgnoreCase("auto_ventoinha_1") || cmd.equalsIgnoreCase("auto_ventoinha_on") ||
+           (cmd.indexOf("auto_ventoinha") >= 0 && (cmd.indexOf("1") >= 0 || cmd.indexOf("true") >= 0))) {
+    autoVentoinha = true;
+    enviarConfirmacao("auto_ventoinha", 1, "ok");
+    exibirMensagemRapida("Auto Ventoinha:", "ATIVADO");
+  }
+  else if (cmd.equalsIgnoreCase("C0") || cmd.equalsIgnoreCase("auto_ventoinha_0") || cmd.equalsIgnoreCase("auto_ventoinha_off") ||
+           (cmd.indexOf("auto_ventoinha") >= 0 && (cmd.indexOf("0") >= 0 || cmd.indexOf("false") >= 0))) {
+    autoVentoinha = false;
+    enviarConfirmacao("auto_ventoinha", 0, "ok");
+    exibirMensagemRapida("Auto Ventoinha:", "DESATIVADO");
+  }
+
+  // --- 4. COMANDO SINCRONIZAÇÃO OFFLINE ---
+  else if (cmd.equalsIgnoreCase("S") || cmd.equalsIgnoreCase("sync") || cmd.indexOf("sync") >= 0) {
     descarregarLoteOfflineParaApp();
   }
-  // Comando: Solicitação imediata de telemetria
-  else if (cmd.indexOf(""cmd":"status"") >= 0 || cmd.indexOf("status") >= 0) {
+
+  // --- 5. COMANDO STATUS / TELEMETRIA ---
+  else if (cmd.equalsIgnoreCase("T") || cmd.equalsIgnoreCase("status") || cmd.indexOf("status") >= 0) {
     enviarTelemetria();
   }
 }
 
 // =========================================================================================
-// MENSAGEM RÁPIDA NO LCD (FEEDBACK DE 1.2 SEGUNDOS)
+// MENSAGEM NÃO-BLOQUEANTE NO LCD (SEM FREEZES)
 // =========================================================================================
 
-void exibirMensagemRapida(const char* linha0, const char* linha1) {
+void exibirMensagemRapida(const char* l0, const char* l1) {
+  strncpy(linhaTemp0, l0, 16);
+  linhaTemp0[16] = '\0';
+  strncpy(linhaTemp1, l1, 16);
+  linhaTemp1[16] = '\0';
+
+  exibindoMensagemTemp = true;
+  tempoExpiracaoMensagemLCD = millis() + 1500; // 1.5s não-bloqueante
+
   lcd.clear();
   lcd.setCursor(0, 0);
-  lcd.print(linha0);
+  lcd.print(linhaTemp0);
   lcd.setCursor(0, 1);
-  lcd.print(linha1);
-  delay(1200);
-  lcd.clear();
-  ultimoTempoLCD = millis();
+  lcd.print(linhaTemp1);
+}
+
+// =========================================================================================
+// LEITURA ESTÁVEL DO PINO 8 (STATE DO HC-05 COM DEBOUNCE)
+// =========================================================================================
+
+bool lerEstadoBluetoothEstavel() {
+  static bool estadoEstavel = false;
+  static bool ultimoValorLido = false;
+  static unsigned long tempoTransicao = 0;
+
+  bool leituraAtual = (digitalRead(PIN_BT_STATE) == HIGH);
+
+  if (leituraAtual != ultimoValorLido) {
+    ultimoValorLido = leituraAtual;
+    tempoTransicao = millis();
+  }
+
+  if ((millis() - tempoTransicao) > 80) { // 80ms de estabilidade de sinal
+    estadoEstavel = leituraAtual;
+  }
+
+  return estadoEstavel;
 }
 
 // =========================================================================================
@@ -473,7 +557,7 @@ void exibirMensagemRapida(const char* linha0, const char* linha1) {
 
 void setup() {
   Serial.begin(9600);    // Monitor USB para depuração
-  btSerial.begin(9600);  // Comunicação com módulo Bluetooth HC-05
+  btSerial.begin(9600);  // Comunicação serial com módulo Bluetooth HC-05 (Pinos 2 RX e 3 TX)
 
   // Configuração dos pinos digitais
   pinMode(PIN_BT_STATE, INPUT);
@@ -500,25 +584,25 @@ void setup() {
   lcd.createChar(2, iconeBluetooth);
   lcd.createChar(3, iconeAlerta);
 
-  // Bipe musical de inicialização
-  tone(PIN_BUZZER, 1800, 150);
-  delay(180);
+  // Bipe de inicialização
+  tone(PIN_BUZZER, 1800, 120);
+  delay(140);
   tone(PIN_BUZZER, 2400, 150);
 
-  // Animação de inicialização do AgroLink
+  // Apresentação inicial no LCD
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(F("AgroLink Estufa"));
   lcd.setCursor(0, 1);
   lcd.print(F("Bluetooth HC-05"));
-  delay(1500);
-
+  delay(1200);
   lcd.clear();
+
   Serial.println(F("========================================================="));
   Serial.println(F("   AGROLINK - SISTEMA INICIADO COM BLUETOOTH HC-05"));
   Serial.println(F("========================================================="));
 
-  // Verifica estado inicial do Bluetooth
+  // Verifica estado inicial da conexão Bluetooth
   bluetoothConectado = (digitalRead(PIN_BT_STATE) == HIGH);
   bluetoothEstavaConectado = bluetoothConectado;
   if (!bluetoothConectado) {
@@ -534,17 +618,16 @@ void setup() {
 // =========================================================================================
 
 void loop() {
-  // Alimenta o Watchdog Timer
   wdt_reset();
 
   unsigned long tempoAtual = millis();
 
   // ---------------------------------------------------------------------------------------
-  // 1. MONITORAMENTO DO STATUS BLUETOOTH VIA PINO 8 (STATE DO HC-05)
+  // 1. MONITORAMENTO DO PINO 8 (STATE DO HC-05): HIGH = CONECTADO, LOW = LOG OFFLINE
   // ---------------------------------------------------------------------------------------
-  bluetoothConectado = (digitalRead(PIN_BT_STATE) == HIGH);
+  bluetoothConectado = lerEstadoBluetoothEstavel();
 
-  // Transição: DESCONECTADO -> CONECTADO (Celular acabou de parear / conectar)
+  // Transição: DESCONECTADO -> CONECTADO
   if (bluetoothConectado && !bluetoothEstavaConectado) {
     bluetoothEstavaConectado = true;
     Serial.println(F("[BLUETOOTH] Celular CONECTADO em tempo real!"));
@@ -552,14 +635,14 @@ void loop() {
 
     exibirMensagemRapida("AgroLink Estufa", "BT Conectado!");
 
-    // Se houver dados gravados durante a ausência do celular, descarrega o lote!
+    // Descarrega o lote histórico acumulado durante a desconexão
     if (totalRegistrosOffline > 0) {
       descarregarLoteOfflineParaApp();
     } else {
-      enviarTelemetria(); // Envia leitura imediata
+      enviarTelemetria();
     }
   }
-  // Transição: CONECTADO -> DESCONECTADO (Celular afastou-se ou encerrou conexão)
+  // Transição: CONECTADO -> DESCONECTADO
   else if (!bluetoothConectado && bluetoothEstavaConectado) {
     bluetoothEstavaConectado = false;
     tempoInicioOffline = tempoAtual;
@@ -569,31 +652,9 @@ void loop() {
   }
 
   // ---------------------------------------------------------------------------------------
-  // 2. RECEBIMENTO DE COMANDOS SERIAL VIA BLUETOOTH E MONITOR USB
+  // 2. RECEBIMENTO E PROCESSAMENTO CONTÍNUO DE COMANDOS BLUETOOTH / USB
   // ---------------------------------------------------------------------------------------
-  while (btSerial.available() > 0) {
-    char c = btSerial.read();
-    if (c == '\n' || c == '\r') {
-      if (bufferSerial.length() > 0) {
-        processarComando(bufferSerial);
-        bufferSerial = "";
-      }
-    } else if (bufferSerial.length() < 96) {
-      bufferSerial += c;
-    }
-  }
-
-  while (Serial.available() > 0) {
-    char c = Serial.read();
-    if (c == '\n' || c == '\r') {
-      if (bufferSerial.length() > 0) {
-        processarComando(bufferSerial);
-        bufferSerial = "";
-      }
-    } else if (bufferSerial.length() < 96) {
-      bufferSerial += c;
-    }
-  }
+  verificarComandosSeriais();
 
   // ---------------------------------------------------------------------------------------
   // 3. LEITURA DOS SENSORES E CONTROLE AUTOMÁTICO INTELIGENTE
@@ -607,16 +668,15 @@ void loop() {
     if (!isnan(t)) temperatura = t;
     if (!isnan(h)) umidadeAr = h;
 
-    // B. Leitura do Sensor Higrômetro do Solo (Pino A0)
+    // B. Leitura Higrômetro do Solo (Pino A0)
     int soloBruto = analogRead(PIN_SOLO);
-    // Quanto maior a leitura, mais úmido (ou mapeado de 0 a 100%)
     umidadeSoloPorcento = map(soloBruto, LIMITE_SOLO_SECO_VAL, LIMITE_SOLO_MOLHADO_VAL, 0, 100);
     umidadeSoloPorcento = constrain(umidadeSoloPorcento, 0, 100);
 
     // C. Leitura do Sensor Ultrassônico (Pinos 4 e 5) - Nível de Água
     atualizarNivelAgua();
 
-    // D. Alerta sonoro intermitente caso o reservatório esteja vazio
+    // D. Alerta sonoro periódico caso o reservatório esteja vazio
     if (faltaAgua) {
       if (tempoAtual - ultimoAlertaBuzzer >= 4500) {
         ultimoAlertaBuzzer = tempoAtual;
@@ -626,11 +686,9 @@ void loop() {
 
     // E. Automação Inteligente da Bomba de Água
     if (autoBomba && !faltaAgua) {
-      // Solo seco (< 40%): Liga a irrigação
       if (umidadeSoloPorcento < 40 && !bombaLigada) {
         acionarBomba(true, "AutoSoloSeco");
       }
-      // Ponto ideal atingido (>= 75%): Desliga para evitar encharcar a raiz
       else if (umidadeSoloPorcento >= 75 && bombaLigada) {
         acionarBomba(false, "AutoSoloIdeal");
       }
@@ -638,11 +696,9 @@ void loop() {
 
     // F. Automação Inteligente da Ventoinha
     if (autoVentoinha) {
-      // Temperatura elevada (> 30°C): Liga ventilação
       if (temperatura > TEMP_IDEAL_MAX && !ventoinhaLigada) {
         acionarVentoinha(true, "AutoTempAlta");
       }
-      // Temperatura amenizada (<= 27°C): Desliga
       else if (temperatura <= TEMP_IDEAL_MIN && ventoinhaLigada) {
         acionarVentoinha(false, "AutoTempNormal");
       }
@@ -672,53 +728,61 @@ void loop() {
   // ---------------------------------------------------------------------------------------
   // 6. ATUALIZAÇÃO DO DISPLAY LCD 16x2
   // ---------------------------------------------------------------------------------------
-  if (tempoAtual - ultimoTempoLCD >= tempoExibicaoTela) {
-    ultimoTempoLCD = tempoAtual;
-    telaAtual = (telaAtual == 1) ? 2 : 1;
-    lcd.clear();
-  }
-
-  // --- TELA 1: Ambiente & Clima (Temperatura e Umidade do Ar) ---
-  if (telaAtual == 1) {
-    lcd.setCursor(0, 0);
-    lcd.print(F("Clima Estufa "));
-    lcd.setCursor(14, 0);
-    if (bluetoothConectado) {
-      lcd.write(byte(2)); // Ícone Bluetooth conectado
-      lcd.print(F(" "));
-    } else {
-      lcd.print(F("--"));
+  if (exibindoMensagemTemp) {
+    if (tempoAtual >= tempoExpiracaoMensagemLCD) {
+      exibindoMensagemTemp = false;
+      lcd.clear();
+      ultimoTempoLCD = tempoAtual;
+    }
+  } else {
+    if (tempoAtual - ultimoTempoLCD >= tempoExibicaoTela) {
+      ultimoTempoLCD = tempoAtual;
+      telaAtual = (telaAtual == 1) ? 2 : 1;
+      lcd.clear();
     }
 
-    lcd.setCursor(0, 1);
-    lcd.write(byte(0)); // Termômetro
-    lcd.print((int)round(temperatura));
-    lcd.print(F("C "));
+    // --- TELA 1: Ambiente & Clima (Temperatura e Umidade do Ar) ---
+    if (telaAtual == 1) {
+      lcd.setCursor(0, 0);
+      lcd.print(F("Clima Estufa "));
+      lcd.setCursor(14, 0);
+      if (bluetoothConectado) {
+        lcd.write(byte(2)); // Ícone Bluetooth
+        lcd.print(F(" "));
+      } else {
+        lcd.print(F("--"));
+      }
 
-    lcd.print(F("Ar:"));
-    lcd.print((int)round(umidadeAr));
-    lcd.print(F("% "));
+      lcd.setCursor(0, 1);
+      lcd.write(byte(0)); // Termômetro
+      lcd.print((int)round(temperatura));
+      lcd.print(F("C "));
 
-    lcd.setCursor(12, 1);
-    lcd.print(ventoinhaLigada ? F("V:ON") : F("V:OF"));
-  }
-  // --- TELA 2: Solo & Reservatório Ultrassônico de Água ---
-  else {
-    lcd.setCursor(0, 0);
-    lcd.print(F("Solo:"));
-    lcd.write(byte(1)); // Gota
-    lcd.print(umidadeSoloPorcento);
-    lcd.print(F("% "));
-    lcd.print(bombaLigada ? F("B:ON") : F("B:OF"));
+      lcd.print(F("Ar:"));
+      lcd.print((int)round(umidadeAr));
+      lcd.print(F("% "));
 
-    lcd.setCursor(0, 1);
-    if (faltaAgua) {
-      lcd.write(byte(3)); // Alerta
-      lcd.print(F(" RES. CRITICO! "));
-    } else {
-      lcd.print(F("Agua:"));
-      lcd.print(nivelAguaPorcento);
-      lcd.print(F("% [OK]"));
+      lcd.setCursor(12, 1);
+      lcd.print(ventoinhaLigada ? F("V:ON") : F("V:OF"));
+    }
+    // --- TELA 2: Solo & Reservatório Ultrassônico de Água ---
+    else {
+      lcd.setCursor(0, 0);
+      lcd.print(F("Solo:"));
+      lcd.write(byte(1)); // Gota
+      lcd.print(umidadeSoloPorcento);
+      lcd.print(F("% "));
+      lcd.print(bombaLigada ? F("B:ON") : F("B:OF"));
+
+      lcd.setCursor(0, 1);
+      if (faltaAgua) {
+        lcd.write(byte(3)); // Alerta
+        lcd.print(F(" RES. CRITICO! "));
+      } else {
+        lcd.print(F("Agua:"));
+        lcd.print(nivelAguaPorcento);
+        lcd.print(F("% [OK]"));
+      }
     }
   }
 }

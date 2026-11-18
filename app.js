@@ -685,13 +685,41 @@
       this.handleStatusChanged('disconnected', 'Conexão encerrada pelo usuário.');
     },
 
-    sendCommand(cmdObj) {
-      const jsonStr = JSON.stringify(cmdObj);
+    sendCommand(cmd) {
+      let wireCmd = '';
+      let cmdObj = null;
+
+      if (typeof cmd === 'string') {
+        wireCmd = cmd.trim();
+        if (wireCmd === 'B1') cmdObj = { cmd: 'bomba', val: 1 };
+        else if (wireCmd === 'B0') cmdObj = { cmd: 'bomba', val: 0 };
+        else if (wireCmd === 'V1') cmdObj = { cmd: 'ventoinha', val: 1 };
+        else if (wireCmd === 'V0') cmdObj = { cmd: 'ventoinha', val: 0 };
+        else if (wireCmd === 'A1') cmdObj = { cmd: 'auto_bomba', val: 1 };
+        else if (wireCmd === 'A0') cmdObj = { cmd: 'auto_bomba', val: 0 };
+        else if (wireCmd === 'C1') cmdObj = { cmd: 'auto_ventoinha', val: 1 };
+        else if (wireCmd === 'C0') cmdObj = { cmd: 'auto_ventoinha', val: 0 };
+        else if (wireCmd === 'S' || wireCmd.toLowerCase() === 'sync') cmdObj = { cmd: 'sync' };
+        else if (wireCmd === 'T' || wireCmd.toLowerCase() === 'status') cmdObj = { cmd: 'status' };
+        else cmdObj = { cmd: wireCmd };
+      } else if (typeof cmd === 'object' && cmd !== null) {
+        cmdObj = cmd;
+        if (cmd.cmd === 'bomba') wireCmd = (cmd.val === 1) ? 'B1' : 'B0';
+        else if (cmd.cmd === 'ventoinha') wireCmd = (cmd.val === 1) ? 'V1' : 'V0';
+        else if (cmd.cmd === 'auto_bomba') wireCmd = (cmd.val === 1) ? 'A1' : 'A0';
+        else if (cmd.cmd === 'auto_ventoinha') wireCmd = (cmd.val === 1) ? 'C1' : 'C0';
+        else if (cmd.cmd === 'sync') wireCmd = 'S';
+        else if (cmd.cmd === 'status') wireCmd = 'T';
+        else wireCmd = JSON.stringify(cmd);
+      }
+
+      console.log(`[Bluetooth Outgoing] -> "${wireCmd}"`);
+
       if (this.isSimulator) {
-        this.handleSimulatedCommand(cmdObj);
+        this.handleSimulatedCommand(cmdObj || { cmd: wireCmd });
         return true;
       } else if (window.AndroidBluetooth && state.bluetooth.connected) {
-        return window.AndroidBluetooth.send(jsonStr);
+        return window.AndroidBluetooth.send(wireCmd);
       }
       return false;
     },
@@ -804,6 +832,22 @@
           if (active) {
             active.online = true;
             active.telemetria = data;
+
+            // Se havia comando pendente e a telemetria já reflete o novo estado, conclui o ACK
+            ['bomba', 'ventoinha'].forEach(act => {
+              if (state.pendingAck[act] && state.pendingAck[act].waiting) {
+                const actVal = (data[act] === 1 || data[act] === true || data[act] === '1') ? 1 : 0;
+                if (actVal === state.pendingAck[act].targetState) {
+                  state.pendingAck[act].waiting = false;
+                  if (state.pendingAck[act].timer) {
+                    clearTimeout(state.pendingAck[act].timer);
+                    state.pendingAck[act].timer = null;
+                  }
+                  const el = (act === 'bomba') ? dom.blockPump : dom.blockFan;
+                  if (el) el.classList.remove('waiting');
+                }
+              }
+            });
 
             AgroLinkDB.saveReading(active.id, data);
             checkIntelligentTriggers(active, data);
@@ -1167,7 +1211,8 @@
 
     // TRAVA 1: SE O BLUETOOTH ESTIVER DESCONECTADO
     if (!state.bluetooth.connected) {
-      showToast('Estufa desconectada. Conecte o Bluetooth HC-05 para enviar comandos.', 'warning');
+      showToast('Estufa desconectada. Selecione o HC-05 para conectar.', 'warning');
+      BluetoothManager.openDevicePicker();
       return;
     }
 
@@ -1178,6 +1223,12 @@
         showToast('Trava de segurança: Reservatório vazio! A bomba não pode ser ligada para evitar queima a seco.', 'error');
         return;
       }
+    }
+
+    // Se já estiver aguardando confirmação do mesmo atuador, não sobrescreve
+    if (state.pendingAck[atuador] && state.pendingAck[atuador].waiting) {
+      showToast(`Aguardando confirmação da ${atuador === 'bomba' ? 'Bomba' : 'Ventoinha'}...`, 'info');
+      return;
     }
 
     // Ativa estado intermediário piscando
@@ -1198,7 +1249,7 @@
         showToast(`Tempo esgotado: Sem resposta da estufa para a ${atuador === 'bomba' ? 'Bomba' : 'Ventoinha'}.`, 'error');
         if (greenhouse.telemetria) updateDetailViewUI(greenhouse.telemetria, greenhouse.online);
       }
-    }, 4500);
+    }, 4000);
 
     BluetoothManager.sendCommand({
       cmd: atuador,
@@ -1239,7 +1290,15 @@
     if (!greenhouse) return;
 
     if (!state.bluetooth.connected) {
-      showToast('Bluetooth desconectado.', 'warning');
+      showToast('Estufa desconectada. Conecte o Bluetooth para alterar configurações.', 'warning');
+      BluetoothManager.openDevicePicker();
+      if (greenhouse.telemetria) {
+        if (atuador === 'bomba' && greenhouse.telemetria.auto_bomba !== undefined) {
+          dom.switchAutoPump.checked = !!greenhouse.telemetria.auto_bomba;
+        } else if (atuador === 'ventoinha' && greenhouse.telemetria.auto_ventoinha !== undefined) {
+          dom.switchAutoFan.checked = !!greenhouse.telemetria.auto_ventoinha;
+        }
+      }
       return;
     }
 
@@ -2035,17 +2094,39 @@
       showToast('Avisos limpos.', 'info');
     });
 
-    // Atuadores: Bomba e Ventoinha
-    dom.blockPump.addEventListener('click', () => {
+    // Atuadores: Bomba e Ventoinha com debounce e proteção contra duplo clique
+    let lastTapActuator = 0;
+    function triggerActuatorToggle(atuador) {
+      const now = Date.now();
+      if (now - lastTapActuator < 350) return;
+      lastTapActuator = now;
+
       const greenhouse = getActiveGreenhouse();
-      const current = greenhouse && greenhouse.telemetria && greenhouse.telemetria.bomba;
-      sendActuatorCommand('bomba', current ? 0 : 1);
+      if (!greenhouse) return;
+
+      if (!state.bluetooth.connected) {
+        showToast('Estufa desconectada. Selecione o HC-05 para conectar.', 'warning');
+        BluetoothManager.openDevicePicker();
+        return;
+      }
+
+      if (state.pendingAck[atuador] && state.pendingAck[atuador].waiting) {
+        showToast(`Aguardando confirmação da ${atuador === 'bomba' ? 'Bomba' : 'Ventoinha'}...`, 'info');
+        return;
+      }
+
+      const current = greenhouse.telemetria ? (greenhouse.telemetria[atuador] === 1 || greenhouse.telemetria[atuador] === true || greenhouse.telemetria[atuador] === '1') : false;
+      sendActuatorCommand(atuador, current ? 0 : 1);
+    }
+
+    dom.blockPump.addEventListener('click', (e) => {
+      e.preventDefault();
+      triggerActuatorToggle('bomba');
     });
 
-    dom.blockFan.addEventListener('click', () => {
-      const greenhouse = getActiveGreenhouse();
-      const current = greenhouse && greenhouse.telemetria && greenhouse.telemetria.ventoinha;
-      sendActuatorCommand('ventoinha', current ? 0 : 1);
+    dom.blockFan.addEventListener('click', (e) => {
+      e.preventDefault();
+      triggerActuatorToggle('ventoinha');
     });
 
     // Chaves de Modo Automático

@@ -799,6 +799,18 @@ body {
   color: #ffffff;
   font-family: inherit;
   border: none;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.actuator-cube-block * {
+  pointer-events: none;
+}
+
+.actuator-cube-block.waiting {
+  cursor: wait;
 }
 
 .actuator-cube-block:active {
