@@ -15,9 +15,6 @@
   
   <!-- Folha de Estilos Oficial -->
   <link rel="stylesheet" href="style.css">
-  
-  <!-- Cliente MQTT Oficial para Web & Mobile (MQTT.js sobre WebSockets Seguro) -->
-  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
 </head>
 <body>
 
@@ -33,7 +30,15 @@
         </div>
         <div>
           <h1 class="header-title">AgroLink</h1>
-          <span class="header-subtitle" id="headerSubtitle">Gestão de Estufas</span>
+          <div class="header-subtitle-row">
+            <span class="header-subtitle" id="headerSubtitle">Gestão de Estufas</span>
+            <div class="header-bt-indicator disconnected" id="headerBtIndicator" title="Status Bluetooth HC-05">
+              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none">
+                <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+              </svg>
+              <span id="headerBtText">Desconectado</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -121,29 +126,47 @@
 
         <div class="connection-status-pill" id="detailStatusBadge">
           <span class="status-indicator-dot disconnected" id="detailStatusDot"></span>
-          <span class="status-indicator-text" id="detailStatusText">Offline</span>
+          <span class="status-indicator-text" id="detailStatusText">Bluetooth Desconectado</span>
         </div>
       </div>
 
-      <!-- Card de Ação Rápida de Conexão Sem Fio -->
-      <div class="wifi-action-card" id="wifiActionCard">
-        <div class="wifi-card-info">
-          <div class="wifi-icon-badge" id="wifiIconBadge">
-            <svg viewBox="0 0 24 24" width="22" height="22" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
-              <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
-              <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
-              <line x1="12" y1="20" x2="12.01" y2="20"></line>
+      <!-- Card de Ação Rápida de Conexão Bluetooth HC-05 -->
+      <div class="bluetooth-action-card" id="btActionCard">
+        <div class="bt-card-info">
+          <div class="bt-icon-badge disconnected" id="btIconBadge">
+            <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
             </svg>
           </div>
           <div>
-            <strong id="wifiCardTitle">Rede Sem Fio Desconectada</strong>
-            <span id="wifiCardSubtitle">Toque para sincronizar com o adaptador ESP-12E</span>
+            <strong id="btCardTitle">Bluetooth Desconectado</strong>
+            <span id="btCardSubtitle">Toque para parear e conectar com o módulo HC-05</span>
           </div>
         </div>
-        <button class="btn btn-primary" id="btnToggleConnection">
-          <span id="btnConnectionLabel">Conectar</span>
-        </button>
+        <div class="bt-actions-group">
+          <button class="btn btn-secondary hidden" id="btnManualSync" title="Sincronizar leituras offline acumuladas">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <polyline points="1 20 1 14 7 14"></polyline>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+            </svg>
+            <span>Sincronizar</span>
+          </button>
+          <button class="btn btn-primary" id="btnToggleConnection">
+            <span id="btnConnectionLabel">Conectar HC-05</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Banner de Sincronização de Dados Offline (Ativado ao descarregar lote) -->
+      <div class="sync-banner hidden" id="syncBanner">
+        <div class="sync-banner-content">
+          <span class="sync-spinner"></span>
+          <div class="sync-text-box">
+            <strong>Sincronizando dados offline...</strong>
+            <span id="syncProgressText">Recebendo lote histórico de leituras acumuladas da estufa.</span>
+          </div>
+        </div>
       </div>
 
       <!-- =====================================================================
@@ -341,21 +364,30 @@
           <div class="water-card-layout">
             <div class="water-info-col">
               <div class="sensor-icon-box water" id="waterIconBox">
-                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2.5" fill="none">
-                  <path d="M12 2v20"></path>
-                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" stroke-width="2" fill="none">
+                  <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                 </svg>
               </div>
-              <div>
-                <span class="metric-label">Status do Reservatório</span>
-                <h4 class="water-level-title" id="valWaterLevel">Nível Normal</h4>
-                <p class="water-level-desc" id="waterLevelDesc">Abastecimento seguro para irrigação automática.</p>
+              <div class="water-info-texts">
+                <span class="metric-label">Sensor Ultrassônico (Nível de Água)</span>
+                <div class="water-metric-row">
+                  <div class="water-percentage-display">
+                    <span class="water-percent-val" id="valWaterPercent">--%</span>
+                    <span class="water-status-pill" id="valWaterLevel">Aguardando...</span>
+                  </div>
+                </div>
+                <p class="water-level-desc" id="waterLevelDesc">Monitorando distância da lâmina d'água: <strong id="valWaterDist">-- cm</strong></p>
               </div>
             </div>
 
-            <!-- Tanque Visual Ilustrativo -->
+            <!-- Tanque Visual Ilustrativo com Altura Proporcional da Água -->
             <div class="water-visual-tank ok" id="waterVisualTank" aria-hidden="true">
-              <div class="water-tank-liquid" id="waterTankLiquid"></div>
+              <div class="water-tank-marks">
+                <span>100%</span>
+                <span>50%</span>
+                <span>0%</span>
+              </div>
+              <div class="water-tank-liquid" id="waterTankLiquid" style="height: 0%;"></div>
             </div>
           </div>
         </div>
@@ -378,10 +410,16 @@
       </div>
 
       <div class="modal-body">
-        <!-- Filtro Temporal: Dia e Mês -->
-        <div class="graph-filter-bar">
-          <button class="btn-filter-tab active" id="btnFilterDay">Dia (Últimas 24h)</button>
-          <button class="btn-filter-tab" id="btnFilterMonth">Mês (Últimos 30 dias)</button>
+        <!-- Barra de Controle do Gráfico e Indicador de Tempo Real -->
+        <div class="graph-top-bar">
+          <div class="graph-filter-bar">
+            <button class="btn-filter-tab active" id="btnFilterDay">Dia (Últimas 24h)</button>
+            <button class="btn-filter-tab" id="btnFilterMonth">Mês (Últimos 30 dias)</button>
+          </div>
+          <div class="graph-live-badge">
+            <span class="live-dot-pulse"></span>
+            <span>Tempo Real</span>
+          </div>
         </div>
 
         <!-- Estatísticas Rápidas do Período -->
@@ -398,20 +436,25 @@
             <span class="stat-box-label">Máxima</span>
             <strong class="stat-box-val" id="graphStatMax">--</strong>
           </div>
+          <div class="stat-box">
+            <span class="stat-box-label">Faixa Ideal</span>
+            <strong class="stat-box-val" id="graphStatCompliance">--%</strong>
+          </div>
         </div>
 
         <!-- Área de Desenho do Gráfico (Canvas com Faixa Ideal e Lacunas Desconectadas) -->
         <div class="canvas-container">
-          <canvas id="historicalChartCanvas" width="480" height="240"></canvas>
+          <div class="chart-tooltip hidden" id="chartTooltip"></div>
+          <canvas id="historicalChartCanvas" width="520" height="260"></canvas>
           <div class="canvas-legend">
             <span class="legend-item"><span class="legend-color-line"></span> Leitura Real</span>
-            <span class="legend-item"><span class="legend-color-ideal"></span> Faixa Agronômica Ideal</span>
+            <span class="legend-item"><span class="legend-color-ideal"></span> Faixa Ideal Agronômica</span>
             <span class="legend-item"><span class="legend-color-gap"></span> Período Desligado (Offline)</span>
           </div>
         </div>
 
         <p class="graph-offline-note">
-          ℹ️ <strong>Transparência de Dados:</strong> Quando a estufa fica desligada da energia, o gráfico apresenta lacunas pontilhadas sem inventar dados artificiais.
+          ℹ️ <strong>Transparência Agronômica:</strong> Os dados são gravados localmente a cada leitura. Se a estufa ficar sem energia ou sem internet, o gráfico apresentará lacunas visíveis sem inventar dados fictícios. Toque ou arraste o dedo sobre a linha para ver valores específicos.
         </p>
       </div>
     </div>
@@ -439,8 +482,8 @@
         <div class="tutorial-step-card">
           <div class="step-badge">Passo 1</div>
           <div class="step-content">
-            <h4>Pressione o botão físico na estufa</h4>
-            <p>Segure o botão físico no painel da estufa por <strong>3 segundos</strong> até ouvir o <strong>alarme sonoro longo</strong> tocar, indicando que entrou no modo de configuração sem fio.</p>
+            <h4>Pareie o Módulo Bluetooth HC-05</h4>
+            <p>Vá nas <strong>Configurações de Bluetooth</strong> do celular, localize o dispositivo <strong>HC-05</strong> (ou AgroLink) e pareie digitando o PIN <strong>1234</strong> ou <strong>0000</strong>.</p>
           </div>
         </div>
 
@@ -448,8 +491,8 @@
         <div class="tutorial-step-card">
           <div class="step-badge">Passo 2</div>
           <div class="step-content">
-            <h4>Observe a telinha de cristal líquido</h4>
-            <p>O display LCD da estufa exibirá <strong>"Modo Config"</strong> e o identificador de rede sem fio <strong>"AgroLink-Estufa"</strong> emitido pelo adaptador ESP-12E.</p>
+            <h4>Conecte Diretamente pelo App</h4>
+            <p>No aplicativo AgroLink, toque em <strong>Conectar HC-05</strong> e selecione o dispositivo. O Arduino confirmará a conexão tocando <strong>2 bipes rápidos</strong> e exibindo o ícone Bluetooth no display LCD!</p>
           </div>
         </div>
 
@@ -457,8 +500,8 @@
         <div class="tutorial-step-card">
           <div class="step-badge">Passo 3</div>
           <div class="step-content">
-            <h4>Conecte pelo AgroLink</h4>
-            <p>No aplicativo, toque no botão <strong>Conectar</strong> ou cadastre a nova estufa pelo botão <strong>+</strong>. Ao concluir, a estufa sai da configuração, toca 2 bipes rápidos e fica <strong>Online</strong>!</p>
+            <h4>Sincronização Offline Automática</h4>
+            <p>Se você se afastar da estufa, o Arduino Uno grava os dados na <strong>memória interna (Log Offline)</strong>. Ao retornar, o aplicativo <strong>descarrega automaticamente o lote histórico</strong> sem perder nenhuma leitura!</p>
           </div>
         </div>
       </div>
@@ -492,12 +535,12 @@
         </div>
 
         <div class="form-group">
-          <label for="inputGreenhouseId">Código / ID de Comunicação do Adaptador</label>
+          <label for="inputGreenhouseId">Identificador / Nome do Bluetooth HC-05</label>
           <div class="input-with-prefix">
             <span class="input-prefix">agrolink/</span>
             <input type="text" id="inputGreenhouseId" placeholder="estufa_01">
           </div>
-          <small class="form-help">Mesmo código configurado no ESP-12E desta estufa.</small>
+          <small class="form-help">Ex: HC-05 ou nome configurado no módulo Bluetooth.</small>
         </div>
       </div>
 

@@ -1309,13 +1309,52 @@ input:checked + .slider:before {
 /* ==========================================================
    MODAL DE GRÁFICO HISTÓRICO
    ========================================================== */
+.graph-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .graph-filter-bar {
+  flex: 1;
+  min-width: 200px;
   display: flex;
   gap: 0.5rem;
   background: rgba(0, 0, 0, 0.3);
   padding: 4px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-subtle);
+}
+
+.graph-live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.35rem 0.65rem;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--primary-light);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.live-dot-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: pulseLiveDot 1.6s infinite ease-in-out;
+}
+
+@keyframes pulseLiveDot {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.4; }
 }
 
 .btn-filter-tab {
@@ -1339,8 +1378,14 @@ input:checked + .slider:before {
 
 .graph-stats-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.6rem;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+}
+
+@media (max-width: 440px) {
+  .graph-stats-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 .stat-box {
@@ -1368,6 +1413,7 @@ input:checked + .slider:before {
 }
 
 .canvas-container {
+  position: relative;
   width: 100%;
   background: #040906;
   border: 1px solid var(--border-subtle);
@@ -1380,8 +1426,27 @@ input:checked + .slider:before {
 
 #historicalChartCanvas {
   width: 100%;
-  height: 200px;
+  height: 220px;
   display: block;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.chart-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(11, 23, 17, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.75rem;
+  color: #ffffff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  transform: translate(-50%, -120%);
+  white-space: nowrap;
+  z-index: 10;
+  transition: opacity 0.15s ease;
 }
 
 .canvas-legend {
@@ -1678,4 +1743,348 @@ input:checked + .slider:before {
 @keyframes pulseRed {
   0%, 100% { box-shadow: 0 0 6px var(--danger); opacity: 1; }
   50% { box-shadow: 0 0 14px var(--danger); opacity: 0.6; }
+}
+
+/* =========================================================================
+   NOVA IDENTIDADE VISUAL: CONEXÃO BLUETOOTH CLÁSSICO (HC-05) E ULTRASSÔNICO
+   ========================================================================= */
+
+/* Indicador Bluetooth no Topo do Header */
+.header-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.header-bt-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0.2rem 0.55rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  transition: all var(--transition-fast);
+}
+
+.header-bt-indicator.disconnected {
+  background: rgba(100, 116, 139, 0.15);
+  border: 1px solid rgba(100, 116, 139, 0.35);
+  color: #94a3b8;
+}
+
+.header-bt-indicator.syncing {
+  background: rgba(56, 189, 248, 0.2);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  animation: pulseSyncBlue 1.4s infinite ease-in-out;
+}
+
+.header-bt-indicator.connected {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid #10b981;
+  color: #34d399;
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.3);
+}
+
+@keyframes pulseSyncBlue {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.75; }
+}
+
+/* Status Indicator Dot (Bluetooth States) */
+.status-indicator-dot.syncing {
+  background: #38bdf8;
+  box-shadow: 0 0 10px #38bdf8;
+  animation: pulseSyncDot 1s infinite ease-in-out;
+}
+
+@keyframes pulseSyncDot {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+}
+
+/* Card de Conexão Bluetooth HC-05 */
+.bluetooth-action-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.07) 0%, rgba(2, 6, 23, 0.6) 100%);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  transition: all var(--transition-normal);
+}
+
+.bluetooth-action-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.bt-card-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.bt-icon-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all var(--transition-normal);
+}
+
+.bt-icon-badge.disconnected {
+  background: rgba(100, 116, 139, 0.12);
+  border: 1px solid rgba(100, 116, 139, 0.3);
+  color: #94a3b8;
+}
+
+.bt-icon-badge.syncing {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid #38bdf8;
+  color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.35);
+  animation: pulseSyncBlue 1.5s infinite;
+}
+
+.bt-icon-badge.connected {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+  color: #34d399;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+}
+
+.bt-card-info strong {
+  font-size: 0.9375rem;
+  color: #ffffff;
+  display: block;
+}
+
+.bt-card-info span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.bt-actions-group {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+/* Banner de Sincronização de Dados Offline */
+.sync-banner {
+  background: linear-gradient(90deg, rgba(2, 132, 199, 0.22) 0%, rgba(14, 165, 233, 0.12) 100%);
+  border: 1px solid #0284c7;
+  border-radius: var(--radius-md);
+  padding: 0.75rem 1rem;
+  animation: fadeInDown 0.3s ease-out;
+}
+
+.sync-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.sync-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(56, 189, 248, 0.3);
+  border-top-color: #38bdf8;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.sync-text-box strong {
+  display: block;
+  font-size: 0.8125rem;
+  color: #38bdf8;
+}
+
+.sync-text-box span {
+  font-size: 0.7188rem;
+  color: #94a3b8;
+}
+
+/* Sensor Ultrassônico - Visualização de Nível Percentual de Água */
+.water-info-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.water-metric-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.water-percentage-display {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.water-percent-val {
+  font-size: 1.85rem;
+  font-weight: 800;
+  color: #38bdf8;
+  letter-spacing: -0.02em;
+}
+
+.water-status-pill {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.water-status-pill.critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.water-visual-tank {
+  position: relative;
+  width: 65px;
+  height: 90px;
+  background: #020704;
+  border: 2px solid rgba(56, 189, 248, 0.3);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.water-tank-marks {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 0.5625rem;
+  font-family: monospace;
+  color: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.water-tank-liquid {
+  width: 100%;
+  background: linear-gradient(180deg, #38bdf8 0%, #0284c7 100%);
+  border-top: 2px solid #7dd3fc;
+  box-shadow: 0 -2px 10px rgba(56, 189, 248, 0.5);
+  transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.water-visual-tank.critical {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.water-visual-tank.critical .water-tank-liquid {
+  background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+  border-top-color: #fca5a5;
+  box-shadow: 0 -2px 10px rgba(239, 68, 68, 0.6);
+}
+
+/* Modal de Seleção de Dispositivos Bluetooth HC-05 */
+.bt-modal-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bt-hint-banner {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-bottom: 1rem;
+}
+
+.bt-devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+}
+
+.bt-device-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.85rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bt-device-item:hover {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: #38bdf8;
+}
+
+.bt-device-item:active {
+  transform: scale(0.98);
+}
+
+.bt-device-meta strong {
+  display: block;
+  font-size: 0.9375rem;
+  color: #ffffff;
+}
+
+.bt-device-meta small {
+  font-size: 0.7188rem;
+  color: var(--text-dim);
+  font-family: monospace;
+}
+
+.bt-device-loading {
+  text-align: center;
+  padding: 1.5rem;
+  font-size: 0.8125rem;
+  color: var(--text-dim);
+}
+
+.bt-fallback-box {
+  border-top: 1px dashed var(--border-subtle);
+  padding-top: 1rem;
+  margin-top: 0.5rem;
 }
