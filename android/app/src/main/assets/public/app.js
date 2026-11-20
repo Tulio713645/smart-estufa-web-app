@@ -86,8 +86,13 @@
     // Controle de espera por confirmação de comando (estado intermediário piscando)
     pendingAck: {
       bomba: { waiting: false, timer: null, targetState: null },
-      ventoinha: { waiting: false, timer: null, targetState: null }
+      ventoinha: { waiting: false, timer: null, targetState: null },
+      auto_bomba: { waiting: false, timer: null, targetState: null },
+      auto_ventoinha: { waiting: false, timer: null, targetState: null }
     },
+
+    // Dedup de leituras: evita gravar duas vezes o mesmo timestamp (ex.: sync_item repetido)
+    lastSavedTimestamp: {},
 
     // Controle do Gráfico Histórico
     currentGraphMetric: 'temp', // 'temp', 'hum', 'soil'
@@ -392,6 +397,11 @@
     saveReading(greenhouseId, telemetria) {
       if (!greenhouseId || !telemetria) return;
       const now = telemetria.timestamp || Date.now();
+
+      // DEDUP: ignora leituras duplicadas (mesmo timestamp já persistido nesta estufa)
+      if (state.lastSavedTimestamp[greenhouseId] === now) return;
+      state.lastSavedTimestamp[greenhouseId] = now;
+
       const entry = {
         greenhouse_id: greenhouseId,
         timestamp: now,
@@ -593,15 +603,20 @@
     },
 
     openDevicePicker() {
+      if (!dom.modalBluetoothDevices) {
+        showToast('Interface de seleção de Bluetooth indisponível.', 'error');
+        return;
+      }
       dom.modalBluetoothDevices.classList.remove('hidden');
       this.refreshDeviceList();
     },
 
     closeDevicePicker() {
-      dom.modalBluetoothDevices.classList.add('hidden');
+      if (dom.modalBluetoothDevices) dom.modalBluetoothDevices.classList.add('hidden');
     },
 
     refreshDeviceList() {
+      if (!dom.btDevicesList) return;
       dom.btDevicesList.innerHTML = '<div class="bt-device-loading">Procurando dispositivos pareados no celular...</div>';
 
       if (window.AndroidBluetooth && window.AndroidBluetooth.isBluetoothSupported()) {
@@ -636,6 +651,7 @@
     },
 
     renderPairedDevices(devices) {
+      if (!dom.btDevicesList) return;
       if (!devices || devices.length === 0) {
         dom.btDevicesList.innerHTML = `
           <div class="bt-device-loading">
@@ -775,8 +791,8 @@
           state.bluetooth.syncCount = 0;
 
           updateBluetoothUI('syncing');
-          dom.syncBanner.classList.remove('hidden');
-          dom.syncProgressText.textContent = `Recebendo 0 de ${data.sync_start} leituras acumuladas...`;
+          if (dom.syncBanner) dom.syncBanner.classList.remove('hidden');
+          if (dom.syncProgressText) dom.syncProgressText.textContent = `Recebendo 0 de ${data.sync_start} leituras acumuladas...`;
           showToast(`Sincronizando ${data.sync_start} leituras históricas gravadas offline...`, 'info');
           return;
         }
@@ -800,14 +816,14 @@
             });
           }
 
-          dom.syncProgressText.textContent = `Recebendo ${state.bluetooth.syncCount} de ${state.bluetooth.syncTotal} leituras acumuladas...`;
+          if (dom.syncProgressText) dom.syncProgressText.textContent = `Recebendo ${state.bluetooth.syncCount} de ${state.bluetooth.syncTotal} leituras acumuladas...`;
           return;
         }
 
         // CASO 3: Término da sincronização offline
         if (data.sync_end) {
           state.bluetooth.isSyncing = false;
-          dom.syncBanner.classList.add('hidden');
+          if (dom.syncBanner) dom.syncBanner.classList.add('hidden');
           updateBluetoothUI('connected', state.bluetooth.connectedDeviceName);
 
           showToast(`Sincronização offline concluída! ${data.count || state.bluetooth.syncCount} leituras recuperadas.`, 'success');
@@ -1265,11 +1281,9 @@
       state.pendingAck[atuador].waiting = false;
       if (state.pendingAck[atuador].timer) {
         clearTimeout(state.pendingAck[atuador].timer);
+        state.pendingAck[atuador].timer = null;
       }
     }
-
-    const blockEl = (atuador === 'bomba') ? dom.blockPump : dom.blockFan;
-    if (blockEl) blockEl.classList.remove('waiting');
 
     if (data.status === 'bloqueado_sem_agua') {
       showToast('Bloqueado: Reservatório sem água! A bomba foi desativada por segurança.', 'error');
@@ -1277,6 +1291,22 @@
     }
 
     const greenhouse = getActiveGreenhouse();
+
+    // ACK de modo automático (auto_bomba / auto_ventoinha): atualiza a chave correspondente
+    if (atuador === 'auto_bomba' || atuador === 'auto_ventoinha') {
+      const isOn = (data.estado === 1 || data.estado === true);
+      if (greenhouse && greenhouse.telemetria) {
+        greenhouse.telemetria[atuador] = isOn ? 1 : 0;
+      }
+      if (atuador === 'auto_bomba' && dom.switchAutoPump) dom.switchAutoPump.checked = isOn;
+      if (atuador === 'auto_ventoinha' && dom.switchAutoFan) dom.switchAutoFan.checked = isOn;
+      showToast(`Confirmação: Modo automático da ${atuador === 'auto_bomba' ? 'Bomba' : 'Ventoinha'} ${isOn ? 'ATIVADO' : 'DESATIVADO'}!`, 'success');
+      return;
+    }
+
+    const blockEl = (atuador === 'bomba') ? dom.blockPump : dom.blockFan;
+    if (blockEl) blockEl.classList.remove('waiting');
+
     if (greenhouse && greenhouse.telemetria) {
       greenhouse.telemetria[atuador] = data.estado;
       updateDetailViewUI(greenhouse.telemetria, greenhouse.online);
@@ -1981,13 +2011,20 @@
   // CONFIGURAÇÃO DOS EVENT LISTENERS E INICIALIZAÇÃO
   // =========================================================================================
 
+  // Helper: registra listener apenas se o elemento existir (evita null crash que
+  // derrubava TODO o setupEventListeners e deixava todos os botões mortos)
+  function on(el, event, handler, opts) {
+    if (el) el.addEventListener(event, handler, opts);
+    else console.warn('[AgroLink] Elemento não encontrado para evento "' + event + '"');
+  }
+
   function setupEventListeners() {
     // Navegação
-    dom.btnBrandHome.addEventListener('click', () => showView('list'));
-    dom.btnBackToList.addEventListener('click', () => showView('list'));
+    on(dom.btnBrandHome, 'click', () => showView('list'));
+    on(dom.btnBackToList, 'click', () => showView('list'));
 
     // Botão Conectar HC-05 / Desconectar
-    dom.btnToggleConnection.addEventListener('click', () => {
+    on(dom.btnToggleConnection, 'click', () => {
       if (state.bluetooth.connected) {
         BluetoothManager.disconnect();
       } else {
@@ -1996,32 +2033,30 @@
     });
 
     // Botão de Sincronização Manual de Dados Offline
-    if (dom.btnManualSync) {
-      dom.btnManualSync.addEventListener('click', () => {
-        BluetoothManager.requestOfflineSync();
-      });
-    }
+    on(dom.btnManualSync, 'click', () => {
+      BluetoothManager.requestOfflineSync();
+    });
 
     // Modal de Dispositivos Bluetooth
-    dom.btnCloseBtModal.addEventListener('click', () => BluetoothManager.closeDevicePicker());
-    dom.btnCancelBtModal.addEventListener('click', () => BluetoothManager.closeDevicePicker());
-    dom.btnRefreshBtDevices.addEventListener('click', () => BluetoothManager.refreshDeviceList());
-    dom.btnConnectDemoBt.addEventListener('click', () => {
+    on(dom.btnCloseBtModal, 'click', () => BluetoothManager.closeDevicePicker());
+    on(dom.btnCancelBtModal, 'click', () => BluetoothManager.closeDevicePicker());
+    on(dom.btnRefreshBtDevices, 'click', () => BluetoothManager.refreshDeviceList());
+    on(dom.btnConnectDemoBt, 'click', () => {
       BluetoothManager.closeDevicePicker();
       BluetoothManager.startSimulatedConnection('HC-05 Demo');
     });
 
     // Botão Adicionar Estufa (+)
-    dom.btnAddGreenhouse.addEventListener('click', () => {
+    on(dom.btnAddGreenhouse, 'click', () => {
       dom.inputGreenhouseName.value = '';
       dom.inputGreenhouseId.value = `estufa_${state.greenhouses.length + 1}`;
       dom.modalAddGreenhouse.classList.remove('hidden');
     });
 
-    dom.btnCloseAddModal.addEventListener('click', () => dom.modalAddGreenhouse.classList.add('hidden'));
-    dom.btnCancelAddModal.addEventListener('click', () => dom.modalAddGreenhouse.classList.add('hidden'));
+    on(dom.btnCloseAddModal, 'click', () => dom.modalAddGreenhouse.classList.add('hidden'));
+    on(dom.btnCancelAddModal, 'click', () => dom.modalAddGreenhouse.classList.add('hidden'));
 
-    dom.btnSaveGreenhouse.addEventListener('click', () => {
+    on(dom.btnSaveGreenhouse, 'click', () => {
       const name = dom.inputGreenhouseName.value.trim();
       const id = dom.inputGreenhouseId.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
 
@@ -2060,33 +2095,33 @@
     });
 
     // Opções do Bottom Sheet
-    dom.btnSheetOpen.addEventListener('click', handleOptionOpen);
-    dom.btnSheetEdit.addEventListener('click', handleOptionEdit);
-    dom.btnSheetDelete.addEventListener('click', handleOptionDelete);
-    dom.btnSheetCancel.addEventListener('click', closeGreenhouseOptionsSheet);
+    on(dom.btnSheetOpen, 'click', handleOptionOpen);
+    on(dom.btnSheetEdit, 'click', handleOptionEdit);
+    on(dom.btnSheetDelete, 'click', handleOptionDelete);
+    on(dom.btnSheetCancel, 'click', closeGreenhouseOptionsSheet);
 
     // Modal de Edição de Nome
-    dom.btnCloseEditModal.addEventListener('click', () => dom.modalEditGreenhouse.classList.add('hidden'));
-    dom.btnCancelEditModal.addEventListener('click', () => dom.modalEditGreenhouse.classList.add('hidden'));
-    dom.btnSaveEditModal.addEventListener('click', saveEditedGreenhouseName);
+    on(dom.btnCloseEditModal, 'click', () => dom.modalEditGreenhouse.classList.add('hidden'));
+    on(dom.btnCancelEditModal, 'click', () => dom.modalEditGreenhouse.classList.add('hidden'));
+    on(dom.btnSaveEditModal, 'click', saveEditedGreenhouseName);
 
     // Modal de Confirmação de Exclusão
-    dom.btnCloseDeleteModal.addEventListener('click', () => dom.modalConfirmDelete.classList.add('hidden'));
-    dom.btnCancelDeleteModal.addEventListener('click', () => dom.modalConfirmDelete.classList.add('hidden'));
-    dom.btnConfirmDeleteModal.addEventListener('click', confirmDeleteGreenhouse);
+    on(dom.btnCloseDeleteModal, 'click', () => dom.modalConfirmDelete.classList.add('hidden'));
+    on(dom.btnCancelDeleteModal, 'click', () => dom.modalConfirmDelete.classList.add('hidden'));
+    on(dom.btnConfirmDeleteModal, 'click', confirmDeleteGreenhouse);
 
     // Tutorial de Conexão
-    dom.btnOpenTutorial.addEventListener('click', () => dom.modalTutorial.classList.remove('hidden'));
-    dom.btnCloseTutorial.addEventListener('click', () => dom.modalTutorial.classList.add('hidden'));
-    dom.btnGotItTutorial.addEventListener('click', () => dom.modalTutorial.classList.add('hidden'));
+    on(dom.btnOpenTutorial, 'click', () => dom.modalTutorial.classList.remove('hidden'));
+    on(dom.btnCloseTutorial, 'click', () => dom.modalTutorial.classList.add('hidden'));
+    on(dom.btnGotItTutorial, 'click', () => dom.modalTutorial.classList.add('hidden'));
 
     // Notificações
-    dom.btnOpenNotifications.addEventListener('click', () => {
+    on(dom.btnOpenNotifications, 'click', () => {
       renderNotificationsList();
       dom.modalNotifications.classList.remove('hidden');
     });
-    dom.btnCloseNotifications.addEventListener('click', () => dom.modalNotifications.classList.add('hidden'));
-    dom.btnClearNotifications.addEventListener('click', () => {
+    on(dom.btnCloseNotifications, 'click', () => dom.modalNotifications.classList.add('hidden'));
+    on(dom.btnClearNotifications, 'click', () => {
       state.notifications = [];
       localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
       renderNotificationsBadge();
@@ -2119,39 +2154,39 @@
       sendActuatorCommand(atuador, current ? 0 : 1);
     }
 
-    dom.blockPump.addEventListener('click', (e) => {
+    on(dom.blockPump, 'click', (e) => {
       e.preventDefault();
       triggerActuatorToggle('bomba');
     });
 
-    dom.blockFan.addEventListener('click', (e) => {
+    on(dom.blockFan, 'click', (e) => {
       e.preventDefault();
       triggerActuatorToggle('ventoinha');
     });
 
     // Chaves de Modo Automático
-    dom.switchAutoPump.addEventListener('change', () => {
+    on(dom.switchAutoPump, 'change', () => {
       sendAutoModeToggle('bomba', dom.switchAutoPump.checked);
     });
 
-    dom.switchAutoFan.addEventListener('change', () => {
+    on(dom.switchAutoFan, 'change', () => {
       sendAutoModeToggle('ventoinha', dom.switchAutoFan.checked);
     });
 
     // Abertura de Gráficos ao Tocar nos Cards
-    dom.cardTempMetric.addEventListener('click', () => openHistoricalGraph('temp'));
-    dom.cardHumMetric.addEventListener('click', () => openHistoricalGraph('hum'));
-    dom.cardSoilMetric.addEventListener('click', () => openHistoricalGraph('soil'));
+    on(dom.cardTempMetric, 'click', () => openHistoricalGraph('temp'));
+    on(dom.cardHumMetric, 'click', () => openHistoricalGraph('hum'));
+    on(dom.cardSoilMetric, 'click', () => openHistoricalGraph('soil'));
 
     // Controles do Gráfico
-    dom.btnCloseGraph.addEventListener('click', () => dom.modalHistoricalGraph.classList.add('hidden'));
-    dom.btnFilterDay.addEventListener('click', () => {
+    on(dom.btnCloseGraph, 'click', () => dom.modalHistoricalGraph.classList.add('hidden'));
+    on(dom.btnFilterDay, 'click', () => {
       state.currentGraphFilter = 'day';
       dom.btnFilterDay.classList.add('active');
       dom.btnFilterMonth.classList.remove('active');
       renderHistoricalChart();
     });
-    dom.btnFilterMonth.addEventListener('click', () => {
+    on(dom.btnFilterMonth, 'click', () => {
       state.currentGraphFilter = 'month';
       dom.btnFilterMonth.classList.add('active');
       dom.btnFilterDay.classList.remove('active');

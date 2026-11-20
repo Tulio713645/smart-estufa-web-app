@@ -36,8 +36,18 @@ public class MainActivity extends Activity {
     private OutputStream outputStream;
     private InputStream inputStream;
     private Thread workerThread;
+    private Thread connectThread;
     private volatile boolean isConnected = false;
+    private volatile boolean isConnecting = false;
+    private volatile boolean autoReconnect = false;
+    private volatile boolean permissionsGranted = false;
+    private String lastMacAddress = null;
+    private String lastDeviceName = null;
+    private int reconnectAttempts = 0;
+    private static final int MAX_RECONNECT_ATTEMPTS = 6;
+    private static final long RECONNECT_DELAY_MS = 4000;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Handler reconnectHandler = new Handler(Looper.getMainLooper());
 
     // UUID padrão para comunicação Serial Port Profile (SPP) do HC-05
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
@@ -86,6 +96,16 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/public/index.html");
     }
 
+    private boolean hasBtPermissions() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            return checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        }
+        return true;
+    }
+
     private void checkAndRequestPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED ||
@@ -95,11 +115,36 @@ public class MainActivity extends Activity {
                     Manifest.permission.BLUETOOTH_SCAN,
                     Manifest.permission.ACCESS_FINE_LOCATION
                 }, PERMISSION_REQUEST_CODE);
+            } else {
+                permissionsGranted = true;
             }
         } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, PERMISSION_REQUEST_CODE);
+            } else {
+                permissionsGranted = true;
             }
+        } else {
+            permissionsGranted = true;
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != PERMISSION_REQUEST_CODE) return;
+
+        boolean granted = true;
+        for (int r : grantResults) {
+            if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
+        }
+        permissionsGranted = granted;
+
+        if (granted) {
+            notifyStatusChange("permission_granted", "Permissões de Bluetooth concedidas.");
+        } else {
+            notifyStatusChange("permission_denied",
+                "Permissões de Bluetooth negadas. Conceda em Configurações > Apps > AgroLink > Permissões.");
         }
     }
 
@@ -115,31 +160,53 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public boolean isBluetoothEnabled() {
-            return bluetoothAdapter != null && bluetoothAdapter.isEnabled();
+            if (bluetoothAdapter == null) return false;
+            try {
+                return bluetoothAdapter.isEnabled();
+            } catch (SecurityException e) {
+                return false;
+            }
         }
 
         @JavascriptInterface
         public boolean isConnected() {
-            return isConnected && bluetoothSocket != null && bluetoothSocket.isConnected();
+            if (!isConnected || bluetoothSocket == null) return false;
+            try {
+                return bluetoothSocket.isConnected();
+            } catch (SecurityException e) {
+                return false;
+            }
+        }
+
+        @JavascriptInterface
+        public boolean hasPermissions() {
+            return hasBtPermissions();
+        }
+
+        @JavascriptInterface
+        public void requestPermissions() {
+            checkAndRequestPermissions();
         }
 
         @JavascriptInterface
         public String getPairedDevices() {
             JSONArray array = new JSONArray();
-            if (bluetoothAdapter == null || !bluetoothAdapter.isEnabled()) {
-                return array.toString();
-            }
-
+            if (bluetoothAdapter == null) return array.toString();
             try {
+                if (!bluetoothAdapter.isEnabled()) return array.toString();
                 Set<BluetoothDevice> pairedDevices = bluetoothAdapter.getBondedDevices();
                 if (pairedDevices != null) {
                     for (BluetoothDevice device : pairedDevices) {
                         JSONObject obj = new JSONObject();
-                        obj.put("name", device.getName() != null ? device.getName() : "Dispositivo Sem Nome");
+                        String name = null;
+                        try { name = device.getName(); } catch (SecurityException ignored) {}
+                        obj.put("name", name != null ? name : "Dispositivo Sem Nome");
                         obj.put("address", device.getAddress());
                         array.put(obj);
                     }
                 }
+            } catch (SecurityException e) {
+                notifyStatusChange("permission_denied", "Sem permissão BLUETOOTH_CONNECT para listar dispositivos.");
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -152,78 +219,152 @@ public class MainActivity extends Activity {
                 notifyStatusChange("error", "Bluetooth desativado no celular");
                 return;
             }
+            if (!hasBtPermissions()) {
+                notifyStatusChange("permission_denied", "Conceda as permissões de Bluetooth para conectar.");
+                checkAndRequestPermissions();
+                return;
+            }
 
-            // Desconecta sessão anterior se existir
-            disconnect();
+            lastMacAddress = macAddress;
+            autoReconnect = true;
+            reconnectAttempts = 0;
 
-            notifyStatusChange("connecting", "Conectando ao módulo HC-05 (" + macAddress + ")...");
-
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
-                        // Cancela discovery para melhorar velocidade de conexão
-                        bluetoothAdapter.cancelDiscovery();
-
-                        bluetoothSocket = device.createRfcommSocketToServiceRecord(SPP_UUID);
-                        bluetoothSocket.connect();
-
-                        outputStream = bluetoothSocket.getOutputStream();
-                        inputStream = bluetoothSocket.getInputStream();
-                        isConnected = true;
-
-                        notifyStatusChange("connected", device.getName() != null ? device.getName() : "HC-05");
-
-                        // Inicia thread de escuta serial contínua
-                        startListening();
-
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        isConnected = false;
-                        closeConnection();
-                        notifyStatusChange("error", "Falha ao conectar: " + e.getMessage());
-                    }
-                }
-            }).start();
+            startConnect(macAddress);
         }
 
         @JavascriptInterface
         public void disconnect() {
-            new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    closeConnection();
-                    notifyStatusChange("disconnected", "Desconectado do módulo Bluetooth.");
-                }
-            }).start();
+            autoReconnect = false;
+            reconnectHandler.removeCallbacksAndMessages(null);
+            closeConnection();
+            notifyStatusChange("disconnected", "Desconectado do módulo Bluetooth.");
+        }
+
+        @JavascriptInterface
+        public void reconnect() {
+            if (lastMacAddress != null) {
+                autoReconnect = true;
+                reconnectAttempts = 0;
+                startConnect(lastMacAddress);
+            } else {
+                notifyStatusChange("error", "Nenhum dispositivo para reconectar.");
+            }
         }
 
         @JavascriptInterface
         public boolean send(String data) {
-            if (!isConnected || outputStream == null) {
+            final OutputStream os = outputStream;
+            if (!isConnected || os == null) {
                 return false;
             }
             try {
+                // Comandos sempre terminam em '\n' (protocolo do firmware)
                 byte[] bytes = (data.endsWith("\n") ? data : data + "\n").getBytes("UTF-8");
-                outputStream.write(bytes);
-                outputStream.flush();
+                synchronized (this) {
+                    os.write(bytes);
+                    os.flush();
+                }
                 return true;
             } catch (Exception e) {
                 e.printStackTrace();
-                closeConnection();
-                notifyStatusChange("disconnected", "Erro de transmissão serial.");
+                onConnectionLost("Erro de transmissão serial.");
                 return false;
             }
         }
     }
 
+    private void startConnect(final String macAddress) {
+        // Evita duas conexões concorrentes: encerra qualquer tentativa anterior
+        isConnecting = false;
+        if (connectThread != null && connectThread.isAlive()) {
+            connectThread.interrupt();
+        }
+        closeConnection();
+
+        isConnecting = true;
+        notifyStatusChange("connecting", "Conectando ao módulo HC-05 (" + macAddress + ")...");
+
+        connectThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    BluetoothDevice device = bluetoothAdapter.getRemoteDevice(macAddress);
+                    String name = null;
+                    try { name = device.getName(); } catch (SecurityException se) { name = null; }
+                    lastDeviceName = name;
+
+                    // Cancela discovery para melhorar velocidade de conexão
+                    try { bluetoothAdapter.cancelDiscovery(); } catch (SecurityException ignored) {}
+
+                    BluetoothSocket socket = device.createRfcommSocketToServiceRecord(SPP_UUID);
+                    socket.connect();
+
+                    // Se uma desconexão aconteceu durante o connect, descarta o socket
+                    if (!isConnecting) {
+                        try { socket.close(); } catch (Exception ignored) {}
+                        return;
+                    }
+
+                    bluetoothSocket = socket;
+                    outputStream = socket.getOutputStream();
+                    inputStream = socket.getInputStream();
+                    isConnected = true;
+                    isConnecting = false;
+                    reconnectAttempts = 0;
+
+                    String nome = name != null ? name : "HC-05";
+                    notifyStatusChange("connected", nome);
+
+                    // Inicia thread de escuta serial contínua
+                    startListening();
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    isConnecting = false;
+                    closeConnection();
+                    notifyStatusChange("error", "Falha ao conectar: " + e.getMessage());
+                    scheduleReconnect();
+                }
+            }
+        });
+        connectThread.start();
+    }
+
+    private void scheduleReconnect() {
+        if (!autoReconnect || lastMacAddress == null) return;
+        if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+            notifyStatusChange("disconnected", "Não foi possível reconectar ao HC-05. Toque em Conectar.");
+            autoReconnect = false;
+            return;
+        }
+        reconnectAttempts++;
+        notifyStatusChange("connecting", "Reconectando ao HC-05 (tentativa " + reconnectAttempts + ")...");
+        reconnectHandler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (autoReconnect && !isConnected && lastMacAddress != null) {
+                    startConnect(lastMacAddress);
+                }
+            }
+        }, RECONNECT_DELAY_MS);
+    }
+
+    private void onConnectionLost(String message) {
+        boolean wasConnected = isConnected;
+        closeConnection();
+        notifyStatusChange("disconnected", message);
+        if (wasConnected) {
+            scheduleReconnect();
+        }
+    }
+
     private void startListening() {
+        final InputStream is = inputStream;
         workerThread = new Thread(new Runnable() {
             @Override
             public void run() {
                 try {
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"));
                     String line;
                     while (isConnected && (line = reader.readLine()) != null) {
                         final String data = line.trim();
@@ -241,8 +382,7 @@ public class MainActivity extends Activity {
                 } catch (Exception e) {
                     if (isConnected) {
                         e.printStackTrace();
-                        closeConnection();
-                        notifyStatusChange("disconnected", "Conexão Bluetooth interrompida.");
+                        onConnectionLost("Conexão Bluetooth interrompida.");
                     }
                 }
             }
@@ -250,8 +390,9 @@ public class MainActivity extends Activity {
         workerThread.start();
     }
 
-    private void closeConnection() {
+    private synchronized void closeConnection() {
         isConnected = false;
+        isConnecting = false;
         try {
             if (inputStream != null) inputStream.close();
         } catch (Exception ignored) {}
@@ -271,7 +412,7 @@ public class MainActivity extends Activity {
             @Override
             public void run() {
                 if (webView != null) {
-                    webView.evaluateJavascript("if(window.onBluetoothStatusChanged){window.onBluetoothStatusChanged(" + 
+                    webView.evaluateJavascript("if(window.onBluetoothStatusChanged){window.onBluetoothStatusChanged(" +
                         JSONObject.quote(status) + ", " + JSONObject.quote(message) + ");}", null);
                 }
             }
@@ -289,6 +430,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        autoReconnect = false;
+        reconnectHandler.removeCallbacksAndMessages(null);
         closeConnection();
         super.onDestroy();
     }

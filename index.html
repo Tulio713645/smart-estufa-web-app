@@ -670,6 +670,45 @@
     </div>
   </div>
 
+  <!-- =========================================================================
+       MODAL 8: SELEÇÃO DE DISPOSITIVO BLUETOOTH HC-05 PAREADO
+       ========================================================================= -->
+  <div class="modal-backdrop hidden" id="modalBluetoothDevices" role="dialog" aria-modal="true" aria-labelledby="btPickerTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-box">
+          <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+            <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+          </svg>
+          <h3 id="btPickerTitle">Selecione o Módulo Bluetooth</h3>
+        </div>
+        <button class="modal-close-btn" id="btnCloseBtModal" aria-label="Fechar">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;">
+          Escolha o HC-05 pareado com o seu celular. Se não aparecer, vá em <strong>Configurações &gt; Bluetooth</strong> e pareie com o PIN <strong>1234</strong>.
+        </p>
+        <div class="bt-devices-list" id="btDevicesList">
+          <div class="bt-device-loading">Carregando dispositivos pareados...</div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; gap: 0.5rem;">
+        <button type="button" class="btn btn-secondary" id="btnRefreshBtDevices" style="flex:1;">
+          <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 4px;">
+            <polyline points="23 4 23 10 17 10"></polyline>
+            <polyline points="1 20 1 14 7 14"></polyline>
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+          </svg>
+          Atualizar Lista
+        </button>
+        <button type="button" class="btn btn-secondary" id="btnConnectDemoBt" style="flex:1;">🧪 Demo</button>
+        <button type="button" class="btn btn-secondary" id="btnCancelBtModal" style="flex:1;">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Toasts de Notificação Rápida -->
   <div class="toast-container" id="toastContainer"></div>
 
