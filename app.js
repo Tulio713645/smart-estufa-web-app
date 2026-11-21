@@ -33,6 +33,7 @@
     {
       id: 'estufa_01',
       nome: 'Estufa 1 (Principal)',
+      icon: 'tomato', // Ícone personalizado: tomate
       online: false,
       telemetria: {
         temp: 24.5,
@@ -50,6 +51,7 @@
     {
       id: 'estufa_02',
       nome: 'Estufa 2 (Secundária)',
+      icon: 'pepper', // Ícone personalizado: pimentão
       online: false,
       telemetria: {
         temp: 23.0,
@@ -65,6 +67,9 @@
       }
     }
   ];
+
+  // Ícone genérico de estufa (sem legume específico)
+  const GREENHOUSE_ICON = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V9"/><path d="M15 22V9"/><path d="M12 22V14"/></svg>`;
 
   // Estado Central da Aplicação
   const state = {
@@ -110,8 +115,8 @@
     // Header & Navegação
     btnBrandHome: document.getElementById('btnBrandHome'),
     headerSubtitle: document.getElementById('headerSubtitle'),
-    headerBtIndicator: document.getElementById('headerBtIndicator'),
-    headerBtText: document.getElementById('headerBtText'),
+    headerBtFloating: document.getElementById('headerBtFloating'),
+    headerBtFloatingText: document.getElementById('headerBtFloatingText'),
     btnAddGreenhouse: document.getElementById('btnAddGreenhouse'),
     btnOpenTutorial: document.getElementById('btnOpenTutorial'),
     btnOpenNotifications: document.getElementById('btnOpenNotifications'),
@@ -127,12 +132,14 @@
     btnBackToList: document.getElementById('btnBackToList'),
     activeGreenhouseName: document.getElementById('activeGreenhouseName'),
     activeGreenhouseId: document.getElementById('activeGreenhouseId'),
+    detailAvatarBox: document.getElementById('detailAvatarBox'),
     detailStatusBadge: document.getElementById('detailStatusBadge'),
     detailStatusDot: document.getElementById('detailStatusDot'),
     detailStatusText: document.getElementById('detailStatusText'),
 
     // Card de Conexão Bluetooth HC-05
     btActionCard: document.getElementById('btActionCard'),
+    detailBtStatus: document.getElementById('detailBtStatus'),
     btIconBadge: document.getElementById('btIconBadge'),
     btCardTitle: document.getElementById('btCardTitle'),
     btCardSubtitle: document.getElementById('btCardSubtitle'),
@@ -171,6 +178,7 @@
     valWaterPercent: document.getElementById('valWaterPercent'),
     valWaterDist: document.getElementById('valWaterDist'),
     valWaterLevel: document.getElementById('valWaterLevel'),
+    valWaterIdeal: document.getElementById('valWaterIdeal'),
     waterLevelDesc: document.getElementById('waterLevelDesc'),
     waterVisualTank: document.getElementById('waterVisualTank'),
     waterTankLiquid: document.getElementById('waterTankLiquid'),
@@ -217,6 +225,10 @@
     graphStatCompliance: document.getElementById('graphStatCompliance'),
     chartTooltip: document.getElementById('chartTooltip'),
     historicalChartCanvas: document.getElementById('historicalChartCanvas'),
+    graphCurrentNumber: document.getElementById('graphCurrentNumber'),
+    graphCurrentUnit: document.getElementById('graphCurrentUnit'),
+    graphCurrentTime: document.getElementById('graphCurrentTime'),
+    graphStatIdealRange: document.getElementById('graphStatIdealRange'),
 
     modalTutorial: document.getElementById('modalTutorial'),
     btnCloseTutorial: document.getElementById('btnCloseTutorial'),
@@ -1104,13 +1116,20 @@
 
   function updateBluetoothUI(status, deviceName) {
     if (status === 'connected') {
-      // 1. Indicador do Header (Verde)
-      dom.headerBtIndicator.className = 'header-bt-indicator connected';
-      dom.headerBtText.textContent = 'Conectado';
+      // 1. Indicador na BT Status Bar (Verde)
+      dom.headerBtFloating.className = 'bt-status-indicator connected';
+      dom.headerBtFloatingText.textContent = 'Conectado';
 
-      // 2. Status Pill da Barra de Detalhe
+      // 2. Status Pill da Barra de Detalhe (antigo)
       dom.detailStatusDot.className = 'status-indicator-dot connected';
       dom.detailStatusText.textContent = 'Bluetooth Conectado';
+
+      // 2b. Novo Status BT Vertical na Detail View
+      if (dom.detailBtStatus) {
+        dom.detailBtStatus.className = 'detail-bt-status connected';
+        dom.detailStatusDot.className = 'status-indicator-dot connected';
+        dom.detailStatusText.textContent = 'Bluetooth Conectado';
+      }
 
       // 3. Card de Ação Principal
       dom.btIconBadge.className = 'bt-icon-badge connected';
@@ -1120,13 +1139,20 @@
       dom.btnManualSync.classList.remove('hidden');
     }
     else if (status === 'syncing') {
-      // 1. Indicador do Header (Azul Pulsante)
-      dom.headerBtIndicator.className = 'header-bt-indicator syncing';
-      dom.headerBtText.textContent = 'Sincronizando';
+      // 1. Indicador na BT Status Bar (Azul Pulsante)
+      dom.headerBtFloating.className = 'bt-status-indicator syncing';
+      dom.headerBtFloatingText.textContent = 'Sincronizando';
 
       // 2. Status Pill da Barra de Detalhe
       dom.detailStatusDot.className = 'status-indicator-dot syncing';
       dom.detailStatusText.textContent = 'Sincronizando Dados...';
+
+      // 2b. Novo Status BT Vertical na Detail View
+      if (dom.detailBtStatus) {
+        dom.detailBtStatus.className = 'detail-bt-status syncing';
+        dom.detailStatusDot.className = 'status-indicator-dot syncing';
+        dom.detailStatusText.textContent = 'Sincronizando Dados...';
+      }
 
       // 3. Card de Ação Principal
       dom.btIconBadge.className = 'bt-icon-badge syncing';
@@ -1136,11 +1162,18 @@
       dom.btnManualSync.classList.add('hidden');
     }
     else if (status === 'connecting') {
-      dom.headerBtIndicator.className = 'header-bt-indicator disconnected';
-      dom.headerBtText.textContent = 'Conectando...';
+      dom.headerBtFloating.className = 'bt-status-indicator disconnected';
+      dom.headerBtFloatingText.textContent = 'Conectando...';
 
       dom.detailStatusDot.className = 'status-indicator-dot disconnected';
       dom.detailStatusText.textContent = 'Pareando...';
+
+      // 2b. Novo Status BT Vertical na Detail View
+      if (dom.detailBtStatus) {
+        dom.detailBtStatus.className = 'detail-bt-status disconnected';
+        dom.detailStatusDot.className = 'status-indicator-dot disconnected';
+        dom.detailStatusText.textContent = 'Pareando...';
+      }
 
       dom.btIconBadge.className = 'bt-icon-badge disconnected';
       dom.btCardTitle.textContent = 'Conectando ao Bluetooth...';
@@ -1150,11 +1183,18 @@
     }
     else {
       // Desconectado (Cinza)
-      dom.headerBtIndicator.className = 'header-bt-indicator disconnected';
-      dom.headerBtText.textContent = 'Desconectado';
+      dom.headerBtFloating.className = 'bt-status-indicator disconnected';
+      dom.headerBtFloatingText.textContent = 'Bluetooth Desconectado';
 
       dom.detailStatusDot.className = 'status-indicator-dot disconnected';
       dom.detailStatusText.textContent = 'Bluetooth Desconectado';
+
+      // 2b. Novo Status BT Vertical na Detail View
+      if (dom.detailBtStatus) {
+        dom.detailBtStatus.className = 'detail-bt-status disconnected';
+        dom.detailStatusDot.className = 'status-indicator-dot disconnected';
+        dom.detailStatusText.textContent = 'Bluetooth Desconectado';
+      }
 
       dom.btIconBadge.className = 'bt-icon-badge disconnected';
       dom.btCardTitle.textContent = 'Bluetooth Desconectado';
@@ -1162,6 +1202,48 @@
       dom.btnConnectionLabel.textContent = 'Conectar HC-05';
       dom.btnManualSync.classList.add('hidden');
     }
+  }
+
+  // Helpers para status/ideal (usados no card, detalhe e gráfico)
+  // Faixas ideais numéricas (usadas para sombreamento do gráfico)
+  const IDEAL_RANGES = {
+    soil: { min: 60, max: 80, unit: '%' },
+    temp: { min: 20, max: 30, unit: '°C' },
+    hum: { min: 60, max: 80, unit: '%' },
+    water: { min: 30, max: 100, unit: '%' }
+  };
+
+  function getSoilStatus(soil) {
+    const v = Math.max(0, Math.min(100, parseInt(soil, 10) || 0));
+    if (v < 40) return { text: 'Solo Seco', class: 'badge status-danger' };
+    if (v < IDEAL_RANGES.soil.min) return { text: `Abaixo do Ideal (${IDEAL_RANGES.soil.min}% - ${IDEAL_RANGES.soil.max}%)`, class: 'badge status-warning' };
+    if (v <= IDEAL_RANGES.soil.max) return { text: `Ideal (${IDEAL_RANGES.soil.min}% - ${IDEAL_RANGES.soil.max}%)`, class: 'badge status-good' };
+    return { text: `Encharcado (>${IDEAL_RANGES.soil.max}%)`, class: 'badge status-danger' };
+  }
+
+  function getTempStatus(temp) {
+    const v = parseFloat(temp);
+    if (isNaN(v)) return { text: '--', class: 'badge' };
+    if (v < 18) return { text: 'Frio (<18°C)', class: 'badge status-warning' };
+    if (v < IDEAL_RANGES.temp.min) return { text: `Levemente Frio (18°C - ${IDEAL_RANGES.temp.min}°C)`, class: 'badge status-warning' };
+    if (v <= IDEAL_RANGES.temp.max) return { text: `Ideal (${IDEAL_RANGES.temp.min}°C - ${IDEAL_RANGES.temp.max}°C)`, class: 'badge status-good' };
+    return { text: `Elevada (>${IDEAL_RANGES.temp.max}°C)`, class: 'badge status-danger' };
+  }
+
+  function getHumStatus(hum) {
+    const v = parseInt(hum, 10);
+    if (isNaN(v)) return { text: '--', class: 'badge' };
+    if (v < 50) return { text: 'Ar Seco (<50%)', class: 'badge status-warning' };
+    if (v < IDEAL_RANGES.hum.min) return { text: `Levemente Seco (50% - ${IDEAL_RANGES.hum.min}%)`, class: 'badge status-warning' };
+    if (v <= IDEAL_RANGES.hum.max) return { text: `Ideal (${IDEAL_RANGES.hum.min}% - ${IDEAL_RANGES.hum.max}%)`, class: 'badge status-good' };
+    return { text: `Alta Umidade (>${IDEAL_RANGES.hum.max}%)`, class: 'badge status-warning' };
+  }
+
+  function getWaterStatus(water) {
+    const v = Math.max(0, Math.min(100, parseInt(water, 10) || 0));
+    if (v <= 15) return { text: 'NÍVEL CRÍTICO (≤15%)', class: 'badge status-danger' };
+    if (v < IDEAL_RANGES.water.min) return { text: `Abaixo do Ideal (${IDEAL_RANGES.water.min}% - ${IDEAL_RANGES.water.max}%)`, class: 'badge status-warning' };
+    return { text: `Ideal (${IDEAL_RANGES.water.min}% - ${IDEAL_RANGES.water.max}%)`, class: 'badge status-good' };
   }
 
   function updateDetailViewUI(data, isOnline) {
@@ -1184,61 +1266,31 @@
     const soil = Math.max(0, Math.min(100, parseInt(data.umidade_solo, 10) || 0));
     dom.valSoil.textContent = soil;
     dom.soilBarFill.style.width = `${soil}%`;
-
-    if (soil < 40) {
-      dom.badgeSoil.textContent = 'Solo Seco';
-      dom.badgeSoil.className = 'badge status-danger';
-      dom.soilBarFill.style.background = 'linear-gradient(90deg, #ef4444, #f97316)';
-    } else if (soil < 60) {
-      dom.badgeSoil.textContent = 'Abaixo do Ideal (40% - 60%)';
-      dom.badgeSoil.className = 'badge status-warning';
-      dom.soilBarFill.style.background = 'linear-gradient(90deg, #f59e0b, #f97316)';
-    } else if (soil <= 80) {
-      dom.badgeSoil.textContent = 'Ideal (60% - 80%)';
-      dom.badgeSoil.className = 'badge status-good';
-      dom.soilBarFill.style.background = 'linear-gradient(90deg, #10b981, #059669)';
-    } else {
-      dom.badgeSoil.textContent = 'Encharcado (>80%)';
-      dom.badgeSoil.className = 'badge status-danger';
-      dom.soilBarFill.style.background = 'linear-gradient(90deg, #06b6d4, #0284c7)';
-    }
+    const soilStatus = getSoilStatus(soil);
+    dom.badgeSoil.textContent = soilStatus.text;
+    dom.badgeSoil.className = soilStatus.class;
+    // Background da barra baseado no status
+    if (soil < 40) dom.soilBarFill.style.background = 'linear-gradient(90deg, #ef4444, #f97316)';
+    else if (soil < 60) dom.soilBarFill.style.background = 'linear-gradient(90deg, #f59e0b, #f97316)';
+    else if (soil <= 80) dom.soilBarFill.style.background = 'linear-gradient(90deg, #10b981, #059669)';
+    else dom.soilBarFill.style.background = 'linear-gradient(90deg, #06b6d4, #0284c7)';
 
     // 2. Temperatura do Ar (Ideal Agronômico: 20°C a 30°C)
     const temp = parseFloat(data.temp);
     if (!isNaN(temp)) {
       dom.valTemp.textContent = temp.toFixed(1);
-      if (temp < 18) {
-        dom.badgeTemp.textContent = 'Frio (<18°C)';
-        dom.badgeTemp.className = 'badge status-warning';
-      } else if (temp < 20) {
-        dom.badgeTemp.textContent = 'Levemente Frio (18°C - 20°C)';
-        dom.badgeTemp.className = 'badge status-warning';
-      } else if (temp <= 30) {
-        dom.badgeTemp.textContent = 'Ideal (20°C - 30°C)';
-        dom.badgeTemp.className = 'badge status-good';
-      } else {
-        dom.badgeTemp.textContent = 'Elevada (>30°C)';
-        dom.badgeTemp.className = 'badge status-danger';
-      }
+      const tempStatus = getTempStatus(temp);
+      dom.badgeTemp.textContent = tempStatus.text;
+      dom.badgeTemp.className = tempStatus.class;
     }
 
     // 3. Umidade do Ar (Ideal Agronômico: 60% a 80%)
     const hum = parseInt(data.umidade_ar, 10);
     if (!isNaN(hum)) {
       dom.valHum.textContent = hum;
-      if (hum < 50) {
-        dom.badgeHum.textContent = 'Ar Seco (<50%)';
-        dom.badgeHum.className = 'badge status-warning';
-      } else if (hum < 60) {
-        dom.badgeHum.textContent = 'Levemente Seco (50% - 60%)';
-        dom.badgeHum.className = 'badge status-warning';
-      } else if (hum <= 80) {
-        dom.badgeHum.textContent = 'Ideal (60% - 80%)';
-        dom.badgeHum.className = 'badge status-good';
-      } else {
-        dom.badgeHum.textContent = 'Alta Umidade (>80%)';
-        dom.badgeHum.className = 'badge status-warning';
-      }
+      const humStatus = getHumStatus(hum);
+      dom.badgeHum.textContent = humStatus.text;
+      dom.badgeHum.className = humStatus.class;
     }
 
     // 4. Reservatório de Água (Sensor Ultrassônico HC-SR04)
@@ -1250,15 +1302,23 @@
     dom.valWaterDist.textContent = `${distCm} cm`;
 
     const isWaterLow = (waterPct <= 15 || data.status_agua === 'BAIXO' || data.falta_agua === 1);
+    const waterStatus = getWaterStatus(waterPct);
+
+    dom.valWaterPercent.textContent = `${waterPct}%`;
+    dom.valWaterLevel.textContent = isWaterLow ? 'NÍVEL CRÍTICO' : 'Nível Seguro';
+    dom.valWaterLevel.className = `water-status-pill ${isWaterLow ? 'critical' : ''}`;
+
+    // Badge de faixa ideal da água
+    if (dom.valWaterIdeal) {
+      dom.valWaterIdeal.textContent = waterStatus.text;
+      dom.valWaterIdeal.className = `water-ideal-badge ${waterStatus.class}`;
+    }
+
     if (isWaterLow) {
-      dom.valWaterLevel.textContent = 'NÍVEL CRÍTICO';
-      dom.valWaterLevel.className = 'water-status-pill critical';
       dom.waterLevelDesc.textContent = 'Atenção: Nível abaixo do mínimo seguro! Bomba bloqueada.';
       dom.waterVisualTank.className = 'water-visual-tank critical';
       dom.pumpSafetyBanner.classList.remove('hidden');
     } else {
-      dom.valWaterLevel.textContent = 'Nível Seguro';
-      dom.valWaterLevel.className = 'water-status-pill';
       dom.waterLevelDesc.textContent = `Distância da lâmina d'água: ${distCm} cm. Abastecimento seguro.`;
       dom.waterVisualTank.className = 'water-visual-tank ok';
       dom.pumpSafetyBanner.classList.add('hidden');
@@ -1458,10 +1518,15 @@
       const soilDisplay = tel.umidade_solo ? `${tel.umidade_solo}%` : '--';
       const waterDisplay = tel.nivel_agua ? `${tel.nivel_agua}%` : '--';
 
+      // Status badges para consistência com detail view
+      const soilStatus = getSoilStatus(tel.umidade_solo);
+      const tempStatus = getTempStatus(tel.temp);
+      const humStatus = getHumStatus(tel.umidade_ar);
+
       card.innerHTML = `
         <div class="unit-top-row">
-          <div class="unit-avatar-box">
-            <img src="assets/logo.png" alt="Estufa">
+          <div class="unit-avatar-box" style="background: var(--primary); color: white;">
+            ${GREENHOUSE_ICON}
           </div>
           <div class="unit-top-actions">
             <span class="unit-status-pill ${greenhouse.online ? 'online' : 'offline'}">
@@ -1481,10 +1546,12 @@
           <div class="summary-item">
             <span>Temp</span>
             <strong>${tempDisplay}</strong>
+            <span class="${tempStatus.class}">${tempStatus.text}</span>
           </div>
           <div class="summary-item">
             <span>Solo</span>
             <strong>${soilDisplay}</strong>
+            <span class="${soilStatus.class}">${soilStatus.text}</span>
           </div>
           <div class="summary-item">
             <span>Água</span>
@@ -1693,6 +1760,13 @@
     dom.activeGreenhouseName.textContent = greenhouse.nome;
     dom.activeGreenhouseId.textContent = `ID: ${greenhouse.id}`;
 
+    // Ícone genérico de estufa no detail view
+    const avatarBox = document.getElementById('detailAvatarBox');
+    if (avatarBox) {
+      avatarBox.innerHTML = GREENHOUSE_ICON;
+      avatarBox.style.background = 'var(--primary)';
+    }
+
     showView('detail');
     updateDetailViewUI(greenhouse.telemetria, greenhouse.online);
   }
@@ -1723,8 +1797,15 @@
     }
 
     await ensureSeedHistory(greenhouse.id);
-    await renderHistoricalChart();
+    
+    // IMPORTANTE: Mostrar o modal PRIMEIRO para que o container tenha dimensões válidas
     dom.modalHistoricalGraph.classList.remove('hidden');
+    
+    // Aguardar o próximo frame para garantir que o layout foi calculado
+    await new Promise(r => requestAnimationFrame(r));
+    
+    // Agora renderizar o gráfico com dimensões corretas
+    await renderHistoricalChart();
   }
 
   async function renderHistoricalChart() {
@@ -1778,14 +1859,14 @@
     const dpr = window.devicePixelRatio || 1;
     const container = canvas.parentElement;
     const containerWidth = container ? container.clientWidth : 520;
-    const displayWidth = Math.min(containerWidth - 2, 520); // -2 for border
-    const displayHeight = 260;
+    const containerHeight = container ? container.clientHeight : 360;
+    const displayWidth = Math.min(containerWidth - 2, 520);
+    const displayHeight = Math.min(containerHeight - 2, 340);
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
 
-    // Definir tamanho CSS do canvas para responsividade
     canvas.style.width = displayWidth + 'px';
     canvas.style.height = displayHeight + 'px';
 
@@ -1799,7 +1880,7 @@
       dom.graphStatMin.textContent = '--';
       dom.graphStatAvg.textContent = '--';
       dom.graphStatMax.textContent = '--';
-      if (dom.graphStatCompliance) dom.graphStatCompliance.textContent = '--%';
+      if (dom.graphStatIdealRange) dom.graphStatIdealRange.textContent = '--';
       state.chartRenderedPoints = [];
       state.chartGaps = [];
       return;
@@ -1808,52 +1889,78 @@
     const metric = state.currentGraphMetric;
     const unit = (metric === 'temp') ? '°C' : '%';
 
-    // Faixas Ideais Agronômicas Reais
-    let idealMin = 20, idealMax = 30; // Temperatura (°C)
-    if (metric === 'hum') { idealMin = 60; idealMax = 80; }  // Umidade do Ar (%)
-    if (metric === 'soil') { idealMin = 60; idealMax = 80; } // Umidade do Solo (%)
+    // Faixas Ideais Agronômicas (usando constantes unificadas)
+    const idealRange = IDEAL_RANGES[metric] || IDEAL_RANGES.temp;
+    const idealMin = idealRange.min;
+    const idealMax = idealRange.max;
 
-    // Estatísticas sobre dados brutos
+    // Estatísticas usando TODAS as leituras brutas (não agregadas)
     const rawValues = rawReadings.map(r => r[metric]);
-    const values = rawValues;
-    const minVal = Math.min(...values);
-    const maxVal = Math.max(...values);
-    const avgVal = values.reduce((acc, v) => acc + v, 0) / values.length;
+    const minVal = Math.min(...rawValues);
+    const maxVal = Math.max(...rawValues);
+    const avgVal = rawValues.reduce((acc, v) => acc + v, 0) / rawValues.length;
 
-    const inIdealCount = values.filter(v => v >= idealMin && v <= idealMax).length;
-    const complianceRate = Math.round((inIdealCount / values.length) * 100);
+    const inIdealCount = rawValues.filter(v => v >= idealMin && v <= idealMax).length;
+    const complianceRate = Math.round((inIdealCount / rawValues.length) * 100);
 
+    // Valor atual (última leitura) para o header do gráfico
+    const latestReading = rawReadings[rawReadings.length - 1];
+    const currentVal = latestReading ? latestReading[metric] : null;
+    const currentTime = latestReading ? new Date(latestReading.t) : null;
+
+    // Atualiza header do gráfico: valor atual grande + timestamp
+    if (dom.graphCurrentNumber && currentVal !== null) {
+      dom.graphCurrentNumber.textContent = (metric === 'temp') ? currentVal.toFixed(1) : Math.round(currentVal);
+      dom.graphCurrentUnit.textContent = unit;
+    }
+    if (dom.graphCurrentTime && currentTime) {
+      dom.graphCurrentTime.textContent = currentTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ' - ' + currentTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    }
+
+    // Atualiza stat boxes
     dom.graphStatMin.textContent = `${minVal.toFixed(1)}${unit}`;
     dom.graphStatAvg.textContent = `${avgVal.toFixed(1)}${unit}`;
     dom.graphStatMax.textContent = `${maxVal.toFixed(1)}${unit}`;
-    if (dom.graphStatCompliance) {
-      dom.graphStatCompliance.textContent = `${complianceRate}%`;
-      dom.graphStatCompliance.style.color = (complianceRate >= 80) ? '#10b981' : (complianceRate >= 50 ? '#f59e0b' : '#ef4444');
+    if (dom.graphStatIdealRange) {
+      dom.graphStatIdealRange.textContent = `${idealMin}–${idealMax}${unit}`;
+      dom.graphStatIdealRange.style.color = '#10b981';
     }
 
-    const padding = { top: 25, right: 25, bottom: 35, left: 45 };
+    // Padding generoso para não cortar nada nas bordas
+    const padding = { top: 50, right: 35, bottom: 70, left: 70 };
     const chartW = displayWidth - padding.left - padding.right;
     const chartH = displayHeight - padding.top - padding.bottom;
 
-    const chartMin = Math.min(idealMin - 4, minVal - 2);
-    const chartMax = Math.max(idealMax + 4, maxVal + 2);
+    // Escala Y com headroom adequado para não cortar pontos no topo
+    let chartMin, chartMax;
+    if (metric === 'temp') {
+      // Temperatura: múltiplos de 5°C, com margem de 5°C acima/abaixo
+      chartMin = Math.floor(Math.min(idealMin - 5, minVal - 3) / 5) * 5;
+      chartMax = Math.ceil(Math.max(idealMax + 5, maxVal + 3) / 5) * 5;
+    } else {
+      // Umidade (%): escala fixa 0-100 para referência agronômica padrão
+      chartMin = 0;
+      chartMax = 100;
+    }
 
     const getY = (val) => padding.top + chartH - ((val - chartMin) / (chartMax - chartMin)) * chartH;
     const getX = (t) => padding.left + ((t - startTime) / (endTime - startTime)) * chartW;
 
-    // 1. Faixa Agronômica Ideal Sombreada
+    // ============ 1. FAIXA AGRONÔMICA IDEAL (BANDA HORIZONTAL LIMPA) ============
     const yIdealTop = getY(idealMax);
     const yIdealBottom = getY(idealMin);
 
+    // Gradiente suave para a faixa ideal
     const idealGrad = ctx.createLinearGradient(0, yIdealTop, 0, yIdealBottom);
     idealGrad.addColorStop(0, 'rgba(16, 185, 129, 0.16)');
-    idealGrad.addColorStop(1, 'rgba(16, 185, 129, 0.08)');
+    idealGrad.addColorStop(1, 'rgba(16, 185, 129, 0.04)');
     ctx.fillStyle = idealGrad;
     ctx.fillRect(padding.left, yIdealTop, chartW, yIdealBottom - yIdealTop);
 
-    ctx.strokeStyle = 'rgba(16, 185, 129, 0.45)';
+    // Linhas tracejadas delimitando a faixa ideal (finas e discretas)
+    ctx.strokeStyle = 'rgba(16, 185, 129, 0.4)';
     ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
+    ctx.setLineDash([6, 6]);
     ctx.beginPath();
     ctx.moveTo(padding.left, yIdealTop);
     ctx.lineTo(padding.left + chartW, yIdealTop);
@@ -1862,103 +1969,120 @@
     ctx.stroke();
     ctx.setLineDash([]);
 
-    ctx.fillStyle = 'rgba(16, 185, 129, 0.8)';
-    ctx.font = '9px sans-serif';
+    // Label "Ideal: X–Y unid" no canto direito da faixa
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.85)';
+    ctx.font = '10px sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText(`Ideal (${idealMin}-${idealMax}${unit})`, padding.left + chartW - 4, yIdealTop - 4);
+    ctx.fillText(`Ideal: ${idealMin}–${idealMax}${unit}`, padding.left + chartW - 6, yIdealTop - 10);
 
-    // 2. Grade de Fundo e Escala Numérica do Eixo Y
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
+    // ============ 2. GRADE E ESCALA DO EIXO Y (VALORES DE REFERÊNCIA LIMPOS) ============
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 1;
+
+    // Linhas horizontais de grade + labels Y - valores redondos fixos
+    let yTicks;
+    if (metric === 'temp') {
+      // Temperatura: ticks de 5 em 5°C
+      const startTick = Math.ceil(chartMin / 5) * 5;
+      const endTick = Math.floor(chartMax / 5) * 5;
+      yTicks = [];
+      for (let v = startTick; v <= endTick; v += 5) yTicks.push(v);
+    } else {
+      // Umidade: ticks fixos 0, 25, 50, 75, 100
+      yTicks = [0, 25, 50, 75, 100].filter(v => v >= chartMin && v <= chartMax);
+    }
+
+    ctx.font = '11px monospace';
+    ctx.fillStyle = '#94a3b8';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    yTicks.forEach(yVal => {
+      const yPos = getY(yVal);
+
+      // Linha de grade horizontal
+      ctx.beginPath();
+      ctx.moveTo(padding.left, yPos);
+      ctx.lineTo(padding.left + chartW, yPos);
+      ctx.stroke();
+
+      // Label Y
+      ctx.fillText(`${yVal}${unit}`, padding.left - 12, yPos);
+    });
+
+    // Eixo Y (linha vertical esquerda)
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
     ctx.moveTo(padding.left, padding.top);
     ctx.lineTo(padding.left, padding.top + chartH);
-    ctx.lineTo(padding.left + chartW, padding.top + chartH);
     ctx.stroke();
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '10px monospace';
-    ctx.textAlign = 'right';
-    ctx.fillText(`${chartMax.toFixed(0)}${unit}`, padding.left - 6, padding.top + 8);
-    ctx.fillText(`${((chartMax + chartMin) / 2).toFixed(0)}${unit}`, padding.left - 6, padding.top + chartH / 2 + 4);
-    ctx.fillText(`${chartMin.toFixed(0)}${unit}`, padding.left - 6, padding.top + chartH);
-
-    // 3. Marcações de Horários no Eixo X
-    ctx.fillStyle = '#64748b';
-    ctx.font = '10px sans-serif';
+    // ============ 3. EIXO X COM TIMESTAMPS LEGÍVEIS ============
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
 
     if (isDay) {
-      // Visão diária: mostra horas relativas (1h, 2h, 3h...) a partir do início do período
-      const totalHours = 24;
-      const stepHours = 4; // Marca a cada 4 horas: 0h, 4h, 8h, 12h, 16h, 20h, 24h
-      const steps = totalHours / stepHours;
-
-      for (let s = 0; s <= steps; s++) {
-        const hourOffset = s * stepHours;
-        const stepTime = startTime + (hourOffset * 60 * 60 * 1000);
+      // Visão diária: a cada 3 horas (00h, 03h, 06h, 09h, 12h, 15h, 18h, 21h, 24h)
+      for (let h = 0; h <= 24; h += 3) {
+        const stepTime = startTime + (h * 60 * 60 * 1000);
         const xPos = getX(stepTime);
 
-        // Label: "1h", "2h", etc. (exceto 0h que mostra "Início" e último que mostra "Agora")
-        let label;
-        if (s === 0) {
-          label = 'Início';
-        } else if (s === steps) {
-          label = 'Agora';
-        } else {
-          label = `${hourOffset}h`;
-        }
+        let label = h === 0 ? '00:00' : (h === 24 ? '24:00' : `${String(h).padStart(2, '0')}:00`);
 
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        // Linha de grade vertical
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
         ctx.beginPath();
         ctx.moveTo(xPos, padding.top);
         ctx.lineTo(xPos, padding.top + chartH);
         ctx.stroke();
 
-        ctx.fillText(label, xPos, padding.top + chartH + 16);
+        ctx.fillText(label, xPos, padding.top + chartH + 10);
       }
     } else {
-      // Visão mensal: mostra dias relativos (Dia 1, Dia 7, Dia 14, Dia 21, Dia 28, Hoje)
-      const steps = 5;
+      // Visão mensal: 6 divisões (início, 5 dias intercalados, hoje)
+      const steps = 6;
       for (let s = 0; s <= steps; s++) {
         const stepTime = startTime + (periodMs / steps) * s;
         const xPos = getX(stepTime);
         const d = new Date(stepTime);
-        const day = d.getDate();
+        const label = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-        let label;
-        if (s === 0) {
-          label = 'Dia 1';
-        } else if (s === steps) {
-          label = 'Hoje';
-        } else {
-          label = `Dia ${day}`;
-        }
-
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
         ctx.beginPath();
         ctx.moveTo(xPos, padding.top);
         ctx.lineTo(xPos, padding.top + chartH);
         ctx.stroke();
 
-        ctx.fillText(label, xPos, padding.top + chartH + 16);
+        ctx.fillText(label, xPos, padding.top + chartH + 10);
       }
     }
 
-    // 4. PLOTAGEM COM TRATAMENTO RÍGIDO DE PERÍODOS OFFLINE (GRÁFICO QUEBRADO)
-    // Visão diária: >15 minutos sem leitura = Estufa Desconectada
-    // Visão mensal: >36 horas entre pontos = dias offline
+    // Eixo X (linha horizontal inferior)
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padding.left, padding.top + chartH);
+    ctx.lineTo(padding.left + chartW, padding.top + chartH);
+    ctx.stroke();
+
+    // ============ 4. PLOTAGEM DA LINHA REAL + GAPS OFFLINE LIMPOS ============
     const MAX_GAP_MS = isDay ? (15 * 60 * 1000) : (36 * 60 * 60 * 1000);
 
     const renderedPoints = [];
     const detectedGaps = [];
 
+    // Prepara pontos com clamping Y para nunca sair da área do gráfico
     readings.forEach(r => {
+      const clampedVal = Math.max(chartMin, Math.min(chartMax, r[metric]));
       const pt = {
         t: r.t,
         val: r[metric],
+        valClamped: clampedVal,
         x: getX(r.t),
-        y: getY(r[metric])
+        y: getY(clampedVal)
       };
       if (r._dayPoints) {
         pt.dayPoints = r._dayPoints;
@@ -1998,36 +2122,53 @@
             durationMs: timeGap
           });
 
-          // A. Sombra translúcida no período offline
-          ctx.fillStyle = 'rgba(239, 68, 68, 0.09)';
-          ctx.fillRect(prev.x, padding.top, Math.max(2, pt.x - prev.x), chartH);
+          // GAP OFFLINE: faixa horizontal limpa (não pontos nos valores dos dados)
+          const gapLeft = prev.x;
+          const gapRight = pt.x;
+          const gapWidth = Math.max(2, gapRight - gapLeft);
 
-          // B. Linha pontilhada cinza transparente conectando os extremos
+          // A. Faixa sombreada horizontal no meio do gráfico (não no topo)
+          const gapYCenter = padding.top + chartH * 0.5;
+          const gapHeight = Math.min(chartH * 0.6, 80);
+          ctx.fillStyle = 'rgba(239, 68, 68, 0.06)';
+          ctx.fillRect(gapLeft, gapYCenter - gapHeight / 2, gapWidth, gapHeight);
+
+          // B. Linha tracejada horizontal no centro da faixa (indica gap)
           ctx.beginPath();
-          ctx.setLineDash([4, 4]);
-          ctx.strokeStyle = 'rgba(148, 163, 184, 0.45)';
+          ctx.setLineDash([8, 8]);
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
           ctx.lineWidth = 1.5;
-          ctx.moveTo(prev.x, prev.y);
-          ctx.lineTo(pt.x, pt.y);
+          ctx.moveTo(gapLeft, gapYCenter);
+          ctx.lineTo(gapRight, gapYCenter);
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // C. Marcadores de corte
-          ctx.fillStyle = '#06100b';
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 2;
+          // C. Marcadores discretos apenas nas extremidades (pequenos losangos)
+          ctx.fillStyle = '#ef4444';
+          const markerSize = 5;
+          // Marcador esquerdo
           ctx.beginPath();
-          ctx.arc(prev.x, prev.y, 3.5, 0, Math.PI * 2);
-          ctx.arc(pt.x, pt.y, 3.5, 0, Math.PI * 2);
+          ctx.moveTo(gapLeft, gapYCenter - markerSize);
+          ctx.lineTo(gapLeft + markerSize, gapYCenter);
+          ctx.lineTo(gapLeft, gapYCenter + markerSize);
+          ctx.lineTo(gapLeft - markerSize, gapYCenter);
+          ctx.closePath();
           ctx.fill();
-          ctx.stroke();
+          // Marcador direito
+          ctx.beginPath();
+          ctx.moveTo(gapRight, gapYCenter - markerSize);
+          ctx.lineTo(gapRight + markerSize, gapYCenter);
+          ctx.lineTo(gapRight, gapYCenter + markerSize);
+          ctx.lineTo(gapRight - markerSize, gapYCenter);
+          ctx.closePath();
+          ctx.fill();
 
-          // D. Etiqueta "OFFLINE"
-          if (pt.x - prev.x > 45) {
+          // D. Label "OFFLINE" centralizado na faixa
+          if (gapWidth > 80) {
             ctx.fillStyle = '#f87171';
-            ctx.font = '8px monospace';
+            ctx.font = '9px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('⚡ OFFLINE', (prev.x + pt.x) / 2, padding.top + 22);
+            ctx.fillText('⚡ OFFLINE', (gapLeft + gapRight) / 2, gapYCenter + 3);
           }
 
           ctx.lineWidth = 2.5;
@@ -2035,6 +2176,7 @@
         }
       }
 
+      // Desenha a linha real (com valor clamped para nunca sair da área)
       if (!isDrawing) {
         ctx.beginPath();
         ctx.moveTo(pt.x, pt.y);
@@ -2047,7 +2189,7 @@
 
     state.chartGaps = detectedGaps;
 
-    // Marcador pulsante no ponto mais recente
+    // Marcador pulsante no ponto mais recente (clamped)
     if (renderedPoints.length > 0) {
       const last = renderedPoints[renderedPoints.length - 1];
       ctx.fillStyle = '#34d399';
@@ -2117,9 +2259,9 @@
       if (closest && minDistance < 50) {
         const metric = state.currentGraphMetric;
         const unit = (metric === 'temp') ? '°C' : '%';
-        let idealMin = 20, idealMax = 30;
-        if (metric === 'hum') { idealMin = 60; idealMax = 80; }
-        if (metric === 'soil') { idealMin = 60; idealMax = 80; }
+        const idealRange = IDEAL_RANGES[metric] || IDEAL_RANGES.temp;
+        const idealMin = idealRange.min;
+        const idealMax = idealRange.max;
 
         const isIdeal = (closest.val >= idealMin && closest.val <= idealMax);
         const statusColor = isIdeal ? '#34d399' : '#f59e0b';
@@ -2149,11 +2291,12 @@
 
         tooltip.innerHTML = tooltipBody;
 
-        // Usar displayWidth/displayHeight dinâmicos
+        // Usar as mesmas dimensões do gráfico renderizado
         const container = canvas.parentElement;
         const containerWidth = container ? container.clientWidth : 520;
+        const containerHeight = container ? container.clientHeight : 360;
         const displayWidth = Math.min(containerWidth - 2, 520);
-        const displayHeight = 260;
+        const displayHeight = Math.min(containerHeight - 2, 340);
 
         const ptScreenX = (closest.x / displayWidth) * rect.width;
         const ptScreenY = (closest.y / displayHeight) * rect.height;

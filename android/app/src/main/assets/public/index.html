@@ -7,12 +7,12 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>AgroLink - Gestão Inteligente de Estufas</title>
-  
+
   <!-- Ícone Oficial AgroLink -->
   <link rel="icon" type="image/png" href="assets/logo.png">
   <link rel="apple-touch-icon" href="assets/logo.png">
   <link rel="manifest" href="manifest.json">
-  
+
   <!-- Folha de Estilos Oficial -->
   <link rel="stylesheet" href="style.css">
 </head>
@@ -30,15 +30,7 @@
         </div>
         <div>
           <h1 class="header-title">AgroLink</h1>
-          <div class="header-subtitle-row">
-            <span class="header-subtitle" id="headerSubtitle">Gestão de Estufas</span>
-            <div class="header-bt-indicator disconnected" id="headerBtIndicator" title="Status Bluetooth HC-05">
-              <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2.2" fill="none">
-                <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
-              </svg>
-              <span id="headerBtText">Desconectado</span>
-            </div>
-          </div>
+          <span class="header-subtitle" id="headerSubtitle">Gestão de Estufas</span>
         </div>
       </div>
 
@@ -69,8 +61,18 @@
           </svg>
         </button>
       </div>
-    </div>
+  </div>
   </header>
+
+  <!-- BT Status Bar - linha própria abaixo do header, não sobreposta -->
+  <div class="bt-status-bar" id="btStatusBar" role="status" aria-live="polite">
+    <div class="bt-status-content">
+      <div class="bt-status-indicator disconnected" id="headerBtFloating" title="Status Bluetooth HC-05">
+        <div class="bt-inline-dot"></div>
+        <span id="headerBtFloatingText">Bluetooth Desconectado</span>
+      </div>
+    </div>
+  </div>
 
   <!-- =========================================================================
        VISÃO 1: GERENCIADOR MULTI-ESTUFAS (ESTILO SMART LIFE)
@@ -120,13 +122,15 @@
         </button>
 
         <div class="detail-title-group">
+          <!-- Linha 1: Nome da estufa em destaque grande -->
           <h2 class="active-greenhouse-title" id="activeGreenhouseName">Estufa 1</h2>
+          <!-- Linha 2: Status do Bluetooth da estufa específica -->
+          <div class="detail-bt-status" id="detailBtStatus">
+            <span class="status-indicator-dot disconnected" id="detailStatusDot"></span>
+            <span class="status-indicator-text" id="detailStatusText">Bluetooth Desconectado</span>
+          </div>
+          <!-- Linha 3: ID discreto -->
           <span class="device-id-tag" id="activeGreenhouseId">ID: estufa_01</span>
-        </div>
-
-        <div class="connection-status-pill" id="detailStatusBadge">
-          <span class="status-indicator-dot disconnected" id="detailStatusDot"></span>
-          <span class="status-indicator-text" id="detailStatusText">Bluetooth Desconectado</span>
         </div>
       </div>
 
@@ -175,7 +179,7 @@
       <div class="section-group">
         <div class="section-group-header">
           <div class="header-accent-dot green"></div>
-          <h3>Solo &amp; Irrigação</h3>
+          <h3>Solo & Irrigação</h3>
           <span class="sub-hint">Toque no card para ver o gráfico</span>
         </div>
 
@@ -221,7 +225,7 @@
             <button class="actuator-cube-block" id="blockPump" aria-pressed="false" aria-label="Ligar ou desligar Bomba de Água">
               <!-- Brilho Suave de Estado Intermediário (Piscando) -->
               <div class="cube-pulsing-layer"></div>
-              
+
               <!-- Animação Contínua de Torneira com Água Saindo -->
               <div class="water-tap-animation" id="waterTapAnimation">
                 <div class="tap-spout">
@@ -247,7 +251,7 @@
             <div class="auto-mode-bar">
               <div class="auto-mode-info">
                 <span class="auto-mode-title">Automático da Bomba</span>
-                <span class="auto-mode-desc">Irriga em solo &lt;40% e desliga em 75%</span>
+                <span class="auto-mode-desc">Irriga em solo <40% e desliga em 75%</span>
               </div>
               <label class="switch" for="switchAutoPump">
                 <input type="checkbox" id="switchAutoPump" checked aria-label="Ativar modo automático da bomba">
@@ -274,7 +278,7 @@
       <div class="section-group">
         <div class="section-group-header">
           <div class="header-accent-dot purple"></div>
-          <h3>Clima &amp; Ventilação</h3>
+          <h3>Clima & Ventilação</h3>
           <span class="sub-hint">Toque nos cards para ver o gráfico</span>
         </div>
 
@@ -322,7 +326,7 @@
           <div class="actuator-interactive-unit">
             <button class="actuator-cube-block fan-cube" id="blockFan" aria-pressed="false" aria-label="Ligar ou desligar Ventoinha">
               <div class="cube-pulsing-layer"></div>
-              
+
               <!-- Animação Contínua de Rotação da Ventoinha -->
               <div class="fan-animation-box" id="fanAnimationBox">
                 <svg class="fan-rotor-svg" id="fanRotorSvg" viewBox="0 0 24 24" width="50" height="50" stroke="currentColor" stroke-width="2" fill="none">
@@ -374,6 +378,7 @@
                   <div class="water-percentage-display">
                     <span class="water-percent-val" id="valWaterPercent">--%</span>
                     <span class="water-status-pill" id="valWaterLevel">Aguardando...</span>
+                    <span class="water-ideal-badge" id="valWaterIdeal"></span>
                   </div>
                 </div>
                 <p class="water-level-desc" id="waterLevelDesc">Monitorando distância da lâmina d'água: <strong id="valWaterDist">-- cm</strong></p>
@@ -422,7 +427,19 @@
           </div>
         </div>
 
-        <!-- Estatísticas Rápidas do Período -->
+        <!-- Header do Gráfico: Valor Atual Grande + Timestamp -->
+        <div class="graph-current-value" id="graphCurrentValue">
+          <div class="current-value-main">
+            <span class="current-value-number" id="graphCurrentNumber">--</span>
+            <span class="current-value-unit" id="graphCurrentUnit">%</span>
+          </div>
+          <div class="current-value-meta">
+            <span class="current-value-label">Última leitura</span>
+            <span class="current-value-time" id="graphCurrentTime">--</span>
+          </div>
+        </div>
+
+        <!-- Estatísticas Rápidas do Período (Faixa Ideal no lugar de Compliance) -->
         <div class="graph-stats-row">
           <div class="stat-box">
             <span class="stat-box-label">Mínima</span>
@@ -436,9 +453,9 @@
             <span class="stat-box-label">Máxima</span>
             <strong class="stat-box-val" id="graphStatMax">--</strong>
           </div>
-          <div class="stat-box">
+          <div class="stat-box ideal-range-box">
             <span class="stat-box-label">Faixa Ideal</span>
-            <strong class="stat-box-val" id="graphStatCompliance">--%</strong>
+            <strong class="stat-box-val" id="graphStatIdealRange">--</strong>
           </div>
         </div>
 
@@ -709,7 +726,7 @@
 
       <div class="modal-body">
         <p style="color: #94a3b8; font-size: 0.85rem; margin-bottom: 1rem;">
-          Escolha o HC-05 pareado com o seu celular. Se não aparecer, vá em <strong>Configurações &gt; Bluetooth</strong> e pareie com o PIN <strong>1234</strong>.
+          Escolha o HC-05 pareado com o seu celular. Se não aparecer, vá em <strong>Configurações > Bluetooth</strong> e pareie com o PIN <strong>1234</strong>.
         </p>
         <div class="bt-devices-list" id="btDevicesList">
           <div class="bt-device-loading">Carregando dispositivos pareados...</div>
