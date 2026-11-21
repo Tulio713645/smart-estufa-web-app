@@ -181,7 +181,6 @@
     btnCloseBtModal: document.getElementById('btnCloseBtModal'),
     btnCancelBtModal: document.getElementById('btnCancelBtModal'),
     btnRefreshBtDevices: document.getElementById('btnRefreshBtDevices'),
-    btnConnectDemoBt: document.getElementById('btnConnectDemoBt'),
 
     // Modais e Bottom Sheet
     modalGreenhouseOptions: document.getElementById('modalGreenhouseOptions'),
@@ -197,6 +196,8 @@
     btnCloseEditModal: document.getElementById('btnCloseEditModal'),
     btnCancelEditModal: document.getElementById('btnCancelEditModal'),
     btnSaveEditModal: document.getElementById('btnSaveEditModal'),
+    btnPickBtDeviceEdit: document.getElementById('btnPickBtDeviceEdit'),
+    btDeviceSelectedEdit: document.getElementById('btDeviceSelectedEdit'),
 
     modalConfirmDelete: document.getElementById('modalConfirmDelete'),
     deleteConfirmText: document.getElementById('deleteConfirmText'),
@@ -227,6 +228,8 @@
     btnSaveGreenhouse: document.getElementById('btnSaveGreenhouse'),
     inputGreenhouseName: document.getElementById('inputGreenhouseName'),
     inputGreenhouseId: document.getElementById('inputGreenhouseId'),
+    btnPickBtDeviceAdd: document.getElementById('btnPickBtDeviceAdd'),
+    btDeviceSelectedAdd: document.getElementById('btDeviceSelectedAdd'),
 
     modalNotifications: document.getElementById('modalNotifications'),
     btnCloseNotifications: document.getElementById('btnCloseNotifications'),
@@ -611,8 +614,93 @@
       this.refreshDeviceList();
     },
 
+    openDevicePickerForGreenhouse(onSelect) {
+      if (!dom.modalBluetoothDevices) {
+        showToast('Interface de seleção de Bluetooth indisponível.', 'error');
+        return;
+      }
+      // Armazena o callback de seleção para uso posterior
+      this._greenhouseSelectCallback = onSelect;
+      this._isGreenhouseSelectionMode = true;
+      dom.modalBluetoothDevices.classList.remove('hidden');
+      this.refreshDeviceListForGreenhouse();
+    },
+
     closeDevicePicker() {
+      this._isGreenhouseSelectionMode = false;
+      this._greenhouseSelectCallback = null;
       if (dom.modalBluetoothDevices) dom.modalBluetoothDevices.classList.add('hidden');
+    },
+
+    refreshDeviceListForGreenhouse() {
+      if (!dom.btDevicesList) return;
+      dom.btDevicesList.innerHTML = '<div class="bt-device-loading">Procurando dispositivos pareados no celular...</div>';
+
+      if (window.AndroidBluetooth && window.AndroidBluetooth.isBluetoothSupported()) {
+        try {
+          const raw = window.AndroidBluetooth.getPairedDevices();
+          const list = JSON.parse(raw);
+          state.bluetooth.pairedDevices = list;
+          this.renderPairedDevicesForGreenhouse(list);
+          return;
+        } catch (e) {
+          console.warn('Erro ao obter dispositivos pareados:', e);
+        }
+      }
+
+      // Em ambiente de navegador web: lista dispositivo simulado
+      dom.btDevicesList.innerHTML = `
+        <div class="bt-device-item" role="button" id="simulatedDeviceItem">
+          <div class="bt-device-meta">
+            <strong>HC-05 (Estufa Inteligente AgroLink)</strong>
+            <small>98:D3:31:FD:A2:14 · Módulo Bluetooth SPP</small>
+          </div>
+          <button class="btn btn-primary btn-sm">Selecionar</button>
+        </div>
+      `;
+
+      const simItem = document.getElementById('simulatedDeviceItem');
+      if (simItem) {
+        simItem.addEventListener('click', () => {
+          if (this._greenhouseSelectCallback) {
+            this._greenhouseSelectCallback({ address: '98:D3:31:FD:A2:14', name: 'HC-05 (Estufa AgroLink)' });
+            this.closeDevicePicker();
+          }
+        });
+      }
+    },
+
+    renderPairedDevicesForGreenhouse(devices) {
+      if (!dom.btDevicesList) return;
+      if (!devices || devices.length === 0) {
+        dom.btDevicesList.innerHTML = `
+          <div class="bt-device-loading">
+            Nenhum módulo Bluetooth pareado encontrado.<br/>
+            <small style="color: #94a3b8;">Vá em Configurações > Bluetooth do seu celular, pareie com o <strong>HC-05</strong> (PIN 1234 ou 0000) e volte aqui!</small>
+          </div>
+        `;
+        return;
+      }
+
+      dom.btDevicesList.innerHTML = '';
+      devices.forEach(dev => {
+        const item = document.createElement('div');
+        item.className = 'bt-device-item';
+        item.innerHTML = `
+          <div class="bt-device-meta">
+            <strong>${dev.name || 'Dispositivo HC-05'}</strong>
+            <small>${dev.address}</small>
+          </div>
+          <button class="btn btn-primary btn-sm">Selecionar</button>
+        `;
+        item.addEventListener('click', () => {
+          if (this._greenhouseSelectCallback) {
+            this._greenhouseSelectCallback(dev);
+            this.closeDevicePicker();
+          }
+        });
+        dom.btDevicesList.appendChild(item);
+      });
     },
 
     refreshDeviceList() {
@@ -1376,6 +1464,7 @@
         <div class="unit-info">
           <h3>${greenhouse.nome}</h3>
           <span class="unit-code-badge">ID: ${greenhouse.id}</span>
+          ${greenhouse.btName ? `<span class="unit-bt-badge"><svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 4px;"><polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline></svg>${greenhouse.btName}</span>` : ''}
         </div>
 
         <div class="unit-metrics-summary">
@@ -1479,6 +1568,12 @@
     if (!greenhouse) return;
 
     dom.inputEditGreenhouseName.value = greenhouse.nome;
+    // Configura o seletor de HC-05
+    const btName = greenhouse.btName || '';
+    const btAddress = greenhouse.btAddress || '';
+    dom.btDeviceSelectedEdit.textContent = btName ? btName : 'Selecionar HC-05 pareado...';
+    dom.btDeviceSelectedEdit.dataset.address = btAddress;
+    dom.btDeviceSelectedEdit.dataset.name = btName;
     dom.modalEditGreenhouse.classList.remove('hidden');
     dom.inputEditGreenhouseName.focus();
   }
@@ -1518,6 +1613,9 @@
   function saveEditedGreenhouseName() {
     const id = state.activeGreenhouseId || state.selectedOptionGreenhouseId;
     const newName = dom.inputEditGreenhouseName.value.trim();
+    const btAddress = dom.btDeviceSelectedEdit.dataset.address || '';
+    const btName = dom.btDeviceSelectedEdit.dataset.name || '';
+
     if (!newName) {
       showToast('O nome da estufa não pode ficar em branco.', 'error');
       return;
@@ -1526,13 +1624,15 @@
     const greenhouse = state.greenhouses.find(g => g.id === (state.selectedOptionGreenhouseId || state.activeGreenhouseId));
     if (greenhouse) {
       greenhouse.nome = newName;
+      greenhouse.btAddress = btAddress;
+      greenhouse.btName = btName;
       saveGreenhouses();
       dom.modalEditGreenhouse.classList.add('hidden');
       renderGreenhousesList();
       if (greenhouse.id === state.activeGreenhouseId) {
         dom.activeGreenhouseName.textContent = newName;
       }
-      showToast(`Nome atualizado para "${newName}"!`, 'success');
+      showToast(`Alterações salvas para "${newName}"!`, 'success');
     }
   }
 
@@ -2028,7 +2128,14 @@
       if (state.bluetooth.connected) {
         BluetoothManager.disconnect();
       } else {
-        BluetoothManager.openDevicePicker();
+        const active = getActiveGreenhouse();
+        if (active && active.btAddress) {
+          // Conecta ao HC-05 específico desta estufa
+          BluetoothManager.connectToDevice(active.btAddress, active.btName || 'HC-05');
+        } else {
+          // Fallback: abre seletor genérico se não houver HC-05 configurado
+          BluetoothManager.openDevicePicker();
+        }
       }
     });
 
@@ -2041,24 +2148,35 @@
     on(dom.btnCloseBtModal, 'click', () => BluetoothManager.closeDevicePicker());
     on(dom.btnCancelBtModal, 'click', () => BluetoothManager.closeDevicePicker());
     on(dom.btnRefreshBtDevices, 'click', () => BluetoothManager.refreshDeviceList());
-    on(dom.btnConnectDemoBt, 'click', () => {
-      BluetoothManager.closeDevicePicker();
-      BluetoothManager.startSimulatedConnection('HC-05 Demo');
-    });
 
     // Botão Adicionar Estufa (+)
     on(dom.btnAddGreenhouse, 'click', () => {
       dom.inputGreenhouseName.value = '';
       dom.inputGreenhouseId.value = `estufa_${state.greenhouses.length + 1}`;
+      dom.btDeviceSelectedAdd.textContent = 'Selecionar HC-05 pareado...';
+      dom.btDeviceSelectedAdd.dataset.address = '';
+      dom.btDeviceSelectedAdd.dataset.name = '';
       dom.modalAddGreenhouse.classList.remove('hidden');
     });
 
     on(dom.btnCloseAddModal, 'click', () => dom.modalAddGreenhouse.classList.add('hidden'));
     on(dom.btnCancelAddModal, 'click', () => dom.modalAddGreenhouse.classList.add('hidden'));
 
+    // Botão para selecionar HC-05 na criação de estufa
+    on(dom.btnPickBtDeviceAdd, 'click', () => {
+      BluetoothManager.openDevicePickerForGreenhouse((device) => {
+        dom.btDeviceSelectedAdd.textContent = device.name || 'HC-05';
+        dom.btDeviceSelectedAdd.dataset.address = device.address;
+        dom.btDeviceSelectedAdd.dataset.name = device.name;
+        showToast(`HC-05 "${device.name || 'HC-05'}" selecionado!`, 'success');
+      });
+    });
+
     on(dom.btnSaveGreenhouse, 'click', () => {
       const name = dom.inputGreenhouseName.value.trim();
       const id = dom.inputGreenhouseId.value.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
+      const btAddress = dom.btDeviceSelectedAdd.dataset.address || '';
+      const btName = dom.btDeviceSelectedAdd.dataset.name || '';
 
       if (!name || !id) {
         showToast('Preencha o nome e o código da estufa.', 'error');
@@ -2070,10 +2188,12 @@
         return;
       }
 
-      state.greenhouses.push({
+      const newGreenhouse = {
         id,
         nome: name,
         online: false,
+        btAddress: btAddress,
+        btName: btName,
         telemetria: {
           temp: 24.0,
           umidade_ar: 65,
@@ -2086,7 +2206,9 @@
           auto_bomba: 1,
           auto_ventoinha: 1
         }
-      });
+      };
+
+      state.greenhouses.push(newGreenhouse);
 
       saveGreenhouses();
       dom.modalAddGreenhouse.classList.add('hidden');
@@ -2104,6 +2226,16 @@
     on(dom.btnCloseEditModal, 'click', () => dom.modalEditGreenhouse.classList.add('hidden'));
     on(dom.btnCancelEditModal, 'click', () => dom.modalEditGreenhouse.classList.add('hidden'));
     on(dom.btnSaveEditModal, 'click', saveEditedGreenhouseName);
+
+    // Botão para selecionar HC-05 na edição de estufa
+    on(dom.btnPickBtDeviceEdit, 'click', () => {
+      BluetoothManager.openDevicePickerForGreenhouse((device) => {
+        dom.btDeviceSelectedEdit.textContent = device.name || 'HC-05';
+        dom.btDeviceSelectedEdit.dataset.address = device.address;
+        dom.btDeviceSelectedEdit.dataset.name = device.name;
+        showToast(`HC-05 "${device.name || 'HC-05'}" selecionado!`, 'success');
+      });
+    });
 
     // Modal de Confirmação de Exclusão
     on(dom.btnCloseDeleteModal, 'click', () => dom.modalConfirmDelete.classList.add('hidden'));

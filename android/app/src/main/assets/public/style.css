@@ -242,6 +242,7 @@ body {
   letter-spacing: 0.04em;
   white-space: nowrap;
   transition: all var(--transition-base);
+  flex-shrink: 0;
 }
 
 .header-bt-indicator svg { flex-shrink: 0; }
@@ -263,6 +264,16 @@ body {
   background: rgba(148, 163, 184, 0.12);
   color: var(--offline);
   border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+/* Fix: header subtitle row não quebrar o BT indicator */
+.header-subtitle-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: 2px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .header-actions {
@@ -575,6 +586,18 @@ body {
   font-size: 0.7rem;
   color: var(--text-dim);
   font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.unit-bt-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 4px;
+  font-size: 0.65rem;
+  color: var(--primary);
+  background: var(--primary-light);
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-weight: 500;
 }
 
 .unit-metrics-summary {
@@ -1981,6 +2004,7 @@ body {
   background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
+  overflow: hidden;
 }
 
 .chart-tooltip {
@@ -2022,6 +2046,44 @@ body {
 
 .stat-box-label { font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
 .stat-box-val { font-size: 1rem; font-weight: 700; color: var(--text-main); }
+
+/* Fix: Canvas legend styling */
+.canvas-legend {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-lg);
+  padding: var(--space-sm) var(--space-md);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color-line {
+  width: 16px;
+  height: 3px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+.legend-color-ideal {
+  width: 16px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(16,185,129,0.4), rgba(16,185,129,0.1));
+  border-radius: 2px;
+}
+
+.legend-color-gap {
+  width: 16px;
+  height: 3px;
+  background: repeating-linear-gradient(90deg, var(--danger), var(--danger) 4px, transparent 4px, transparent 8px);
+  border-radius: 2px;
+}
 
 /* ==========================================================
    TOASTS / NOTIFICAÇÕES
@@ -2160,6 +2222,8 @@ body {
   font-size: 1rem;
   font-family: inherit;
   transition: all var(--transition-fast);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .input-with-prefix:not(:has(.input-prefix)) .form-input { padding-left: 16px; }
@@ -2172,8 +2236,32 @@ body {
 
 .form-input::placeholder { color: var(--text-dim); }
 
+.form-input:disabled {
+  opacity: 0.5;
+  background: var(--bg-secondary);
+}
+
 .form-help {
   font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Fix: Input fields no modal Add Greenhouse - estilizados corretamente */
+#modalAddGreenhouse .form-input,
+#modalEditGreenhouse .form-input {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+}
+
+#modalAddGreenhouse .form-input:focus,
+#modalEditGreenhouse .form-input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+#modalAddGreenhouse .input-prefix,
+#modalEditGreenhouse .input-prefix {
   color: var(--text-dim);
 }
 
@@ -2213,6 +2301,25 @@ body {
 
 .step-content strong { font-size: 0.9375rem; font-weight: 600; color: var(--text-main); }
 .step-content p { font-size: 0.8125rem; color: var(--text-muted); line-height: 1.5; }
+
+/* Fix: Tutorial icons inline com o texto */
+.tutorial-step-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 1.125rem;
+  flex-shrink: 0;
+  margin-right: var(--space-sm);
+  vertical-align: middle;
+}
+
+.step-content h4 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
 
 /* ==========================================================
    HIDDEN UTILITY

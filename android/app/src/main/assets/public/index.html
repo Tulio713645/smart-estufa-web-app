@@ -480,27 +480,27 @@
       <div class="modal-body tutorial-steps-body">
         <!-- Passo 1 -->
         <div class="tutorial-step-card">
-          <div class="step-badge">Passo 1</div>
+          <div class="step-badge">1</div>
           <div class="step-content">
-            <h4>Pareie o Módulo Bluetooth HC-05</h4>
+            <h4><span class="tutorial-step-icon">🔧</span>Pareie o Módulo Bluetooth HC-05</h4>
             <p>Vá nas <strong>Configurações de Bluetooth</strong> do celular, localize o dispositivo <strong>HC-05</strong> (ou AgroLink) e pareie digitando o PIN <strong>1234</strong> ou <strong>0000</strong>.</p>
           </div>
         </div>
 
         <!-- Passo 2 -->
         <div class="tutorial-step-card">
-          <div class="step-badge">Passo 2</div>
+          <div class="step-badge">2</div>
           <div class="step-content">
-            <h4>Conecte Diretamente pelo App</h4>
+            <h4><span class="tutorial-step-icon">📱</span>Conecte Diretamente pelo App</h4>
             <p>No aplicativo AgroLink, toque em <strong>Conectar HC-05</strong> e selecione o dispositivo. O Arduino confirmará a conexão tocando <strong>2 bipes rápidos</strong> e exibindo o ícone Bluetooth no display LCD!</p>
           </div>
         </div>
 
         <!-- Passo 3 -->
         <div class="tutorial-step-card">
-          <div class="step-badge">Passo 3</div>
+          <div class="step-badge">3</div>
           <div class="step-content">
-            <h4>Sincronização Offline Automática</h4>
+            <h4><span class="tutorial-step-icon">☁️</span>Sincronização Offline Automática</h4>
             <p>Se você se afastar da estufa, o Arduino Uno grava os dados na <strong>memória interna (Log Offline)</strong>. Ao retornar, o aplicativo <strong>descarrega automaticamente o lote histórico</strong> sem perder nenhuma leitura!</p>
           </div>
         </div>
@@ -513,7 +513,7 @@
   </div>
 
   <!-- =========================================================================
-       MODAL 3: ADICIONAR NOVA ESTUFA (SEM CLASSIFICAÇÃO DE FRUTAS)
+       MODAL 3: ADICIONAR NOVA ESTUFA (COM SELEÇÃO DE HC-05)
        ========================================================================= -->
   <div class="modal-backdrop hidden" id="modalAddGreenhouse" role="dialog" aria-modal="true" aria-labelledby="addGreenhouseTitle">
     <div class="modal-card">
@@ -535,12 +535,23 @@
         </div>
 
         <div class="form-group">
-          <label for="inputGreenhouseId">Identificador / Nome do Bluetooth HC-05</label>
+          <label for="inputGreenhouseId">Código da Estufa (ID único)</label>
           <div class="input-with-prefix">
             <span class="input-prefix">agrolink/</span>
             <input type="text" id="inputGreenhouseId" placeholder="estufa_01">
           </div>
-          <small class="form-help">Ex: HC-05 ou nome configurado no módulo Bluetooth.</small>
+          <small class="form-help">Identificador único para esta estufa.</small>
+        </div>
+
+        <div class="form-group">
+          <label>Módulo Bluetooth HC-05</label>
+          <button type="button" class="btn btn-secondary btn-block" id="btnPickBtDeviceAdd">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 6px;">
+              <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+            </svg>
+            <span id="btDeviceSelectedAdd">Selecionar HC-05 pareado...</span>
+          </button>
+          <small class="form-help">O HC-05 deve estar pareado no Android (Configurações → Bluetooth).</small>
         </div>
       </div>
 
@@ -624,14 +635,14 @@
   </div>
 
   <!-- =========================================================================
-       MODAL 6: EDITAR NOME DA ESTUFA (CUSTOMIZADO)
+       MODAL 6: EDITAR ESTUFA (NOME + HC-05)
        ========================================================================= -->
   <div class="modal-backdrop hidden" id="modalEditGreenhouse" role="dialog" aria-modal="true">
     <div class="modal-card">
       <div class="modal-header">
         <div class="modal-title-box">
           <span>✏️</span>
-          <h3>Editar Nome da Estufa</h3>
+          <h3>Editar Estufa</h3>
         </div>
         <button class="modal-close-btn" id="btnCloseEditModal">✕</button>
       </div>
@@ -640,10 +651,21 @@
           <label for="inputEditGreenhouseName">Nome da Estufa</label>
           <input type="text" id="inputEditGreenhouseName" class="form-input">
         </div>
+
+        <div class="form-group">
+          <label>Módulo Bluetooth HC-05</label>
+          <button type="button" class="btn btn-secondary btn-block" id="btnPickBtDeviceEdit">
+            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" style="vertical-align: -2px; margin-right: 6px;">
+              <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"></polyline>
+            </svg>
+            <span id="btDeviceSelectedEdit">Selecionar HC-05 pareado...</span>
+          </button>
+          <small class="form-help">O HC-05 deve estar pareado no Android (Configurações → Bluetooth).</small>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" id="btnCancelEditModal">Cancelar</button>
-        <button type="button" class="btn btn-primary" id="btnSaveEditModal">Salvar Nome</button>
+        <button type="button" class="btn btn-primary" id="btnSaveEditModal">Salvar Alterações</button>
       </div>
     </div>
   </div>
@@ -703,7 +725,6 @@
           </svg>
           Atualizar Lista
         </button>
-        <button type="button" class="btn btn-secondary" id="btnConnectDemoBt" style="flex:1;">🧪 Demo</button>
         <button type="button" class="btn btn-secondary" id="btnCancelBtModal" style="flex:1;">Cancelar</button>
       </div>
     </div>
