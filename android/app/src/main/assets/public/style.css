@@ -220,6 +220,8 @@ body {
   align-items: center;
   gap: var(--space-sm);
   margin-top: 2px;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .header-subtitle {
@@ -233,6 +235,12 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Garante que o BT indicator nunca seja coberto */
+.header-subtitle-row > .header-bt-indicator {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .header-bt-indicator {
@@ -269,16 +277,6 @@ body {
   background: rgba(148, 163, 184, 0.12);
   color: var(--offline);
   border: 1px solid rgba(148, 163, 184, 0.2);
-}
-
-/* Fix: header subtitle row não quebrar o BT indicator */
-.header-subtitle-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-top: 2px;
-  flex-wrap: nowrap;
-  min-width: 0;
 }
 
 .header-actions {
@@ -481,6 +479,10 @@ body {
   cursor: pointer;
   min-height: 140px;
   touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
 }
 
 .greenhouse-card-unit:hover,
@@ -569,6 +571,10 @@ body {
   justify-content: center;
   transition: all var(--transition-fast);
   border: 1px solid var(--border-subtle);
+  z-index: 10;
+  position: relative;
+  flex-shrink: 0;
+  touch-action: manipulation;
 }
 
 .btn-card-more:hover,

@@ -1526,6 +1526,8 @@
       card.addEventListener('touchmove', () => { isMoved = true; cancelPress(); });
       card.addEventListener('touchend', (e) => {
         cancelPress();
+        // Ignora se o toque foi no botão ⋮ ou seus filhos
+        if (e.target.closest('.btn-card-more')) return;
         if (!isMoved && !isLongPressed) {
           e.preventDefault();
           openGreenhouseDetail(greenhouse.id);
@@ -1534,8 +1536,10 @@
 
       card.addEventListener('mousedown', startPress);
       card.addEventListener('mousemove', () => { isMoved = true; cancelPress(); });
-      card.addEventListener('mouseup', () => {
+      card.addEventListener('mouseup', (e) => {
         cancelPress();
+        // Ignora se o clique foi no botão ⋮ ou seus filhos
+        if (e.target.closest('.btn-card-more')) return;
         if (!isMoved && !isLongPressed) {
           openGreenhouseDetail(greenhouse.id);
         }
@@ -1885,14 +1889,25 @@
     ctx.textAlign = 'center';
 
     if (isDay) {
-      const steps = 6;
+      // Visão diária: mostra horas relativas (1h, 2h, 3h...) a partir do início do período
+      const totalHours = 24;
+      const stepHours = 4; // Marca a cada 4 horas: 0h, 4h, 8h, 12h, 16h, 20h, 24h
+      const steps = totalHours / stepHours;
+
       for (let s = 0; s <= steps; s++) {
-        const stepTime = startTime + (periodMs / steps) * s;
+        const hourOffset = s * stepHours;
+        const stepTime = startTime + (hourOffset * 60 * 60 * 1000);
         const xPos = getX(stepTime);
-        const d = new Date(stepTime);
-        const hours = String(d.getHours()).padStart(2, '0');
-        const mins = String(d.getMinutes()).padStart(2, '0');
-        const label = (s === steps) ? 'Agora' : `${hours}:${mins}`;
+
+        // Label: "1h", "2h", etc. (exceto 0h que mostra "Início" e último que mostra "Agora")
+        let label;
+        if (s === 0) {
+          label = 'Início';
+        } else if (s === steps) {
+          label = 'Agora';
+        } else {
+          label = `${hourOffset}h`;
+        }
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.beginPath();
@@ -1903,14 +1918,22 @@
         ctx.fillText(label, xPos, padding.top + chartH + 16);
       }
     } else {
+      // Visão mensal: mostra dias relativos (Dia 1, Dia 7, Dia 14, Dia 21, Dia 28, Hoje)
       const steps = 5;
       for (let s = 0; s <= steps; s++) {
         const stepTime = startTime + (periodMs / steps) * s;
         const xPos = getX(stepTime);
         const d = new Date(stepTime);
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const label = (s === steps) ? 'Hoje' : `${day}/${month}`;
+        const day = d.getDate();
+
+        let label;
+        if (s === 0) {
+          label = 'Dia 1';
+        } else if (s === steps) {
+          label = 'Hoje';
+        } else {
+          label = `Dia ${day}`;
+        }
 
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
         ctx.beginPath();
