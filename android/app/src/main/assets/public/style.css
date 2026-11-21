@@ -228,6 +228,11 @@ body {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-bt-indicator {
@@ -475,6 +480,7 @@ body {
   position: relative;
   cursor: pointer;
   min-height: 140px;
+  touch-action: manipulation;
 }
 
 .greenhouse-card-unit:hover,
@@ -2001,10 +2007,17 @@ body {
   position: relative;
   width: 100%;
   height: 320px;
+  min-height: 320px;
   background: var(--bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.canvas-container canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 .chart-tooltip {

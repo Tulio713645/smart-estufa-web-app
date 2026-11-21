@@ -421,8 +421,25 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
+        if (webView != null) {
+            // Tenta delegar o back press para o JavaScript (SPA navigation)
+            webView.evaluateJavascript("(function() { " +
+                "if (typeof window.handleAndroidBackPress === 'function') { " +
+                "return window.handleAndroidBackPress(); " +
+                "} " +
+                "return false; " +
+                "})()", value -> {
+                    if (value != null && "true".equals(value.replace("\"", ""))) {
+                        // JavaScript tratou o back press (fechou modal, voltou para lista, etc.)
+                        return;
+                    } else if (webView.canGoBack()) {
+                        // Fallback para histórico do WebView
+                        webView.goBack();
+                    } else {
+                        // Nenhum tratamento: sai do app
+                        runOnUiThread(() -> super.onBackPressed());
+                    }
+                });
         } else {
             super.onBackPressed();
         }

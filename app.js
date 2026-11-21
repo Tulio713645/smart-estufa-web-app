@@ -1189,13 +1189,17 @@
       dom.badgeSoil.textContent = 'Solo Seco';
       dom.badgeSoil.className = 'badge status-danger';
       dom.soilBarFill.style.background = 'linear-gradient(90deg, #ef4444, #f97316)';
+    } else if (soil < 60) {
+      dom.badgeSoil.textContent = 'Abaixo do Ideal (40% - 60%)';
+      dom.badgeSoil.className = 'badge status-warning';
+      dom.soilBarFill.style.background = 'linear-gradient(90deg, #f59e0b, #f97316)';
     } else if (soil <= 80) {
       dom.badgeSoil.textContent = 'Ideal (60% - 80%)';
       dom.badgeSoil.className = 'badge status-good';
       dom.soilBarFill.style.background = 'linear-gradient(90deg, #10b981, #059669)';
     } else {
-      dom.badgeSoil.textContent = 'Solo Saturado';
-      dom.badgeSoil.className = 'badge status-warning';
+      dom.badgeSoil.textContent = 'Encharcado (>80%)';
+      dom.badgeSoil.className = 'badge status-danger';
       dom.soilBarFill.style.background = 'linear-gradient(90deg, #06b6d4, #0284c7)';
     }
 
@@ -1205,6 +1209,9 @@
       dom.valTemp.textContent = temp.toFixed(1);
       if (temp < 18) {
         dom.badgeTemp.textContent = 'Frio (<18°C)';
+        dom.badgeTemp.className = 'badge status-warning';
+      } else if (temp < 20) {
+        dom.badgeTemp.textContent = 'Levemente Frio (18°C - 20°C)';
         dom.badgeTemp.className = 'badge status-warning';
       } else if (temp <= 30) {
         dom.badgeTemp.textContent = 'Ideal (20°C - 30°C)';
@@ -1221,6 +1228,9 @@
       dom.valHum.textContent = hum;
       if (hum < 50) {
         dom.badgeHum.textContent = 'Ar Seco (<50%)';
+        dom.badgeHum.className = 'badge status-warning';
+      } else if (hum < 60) {
+        dom.badgeHum.textContent = 'Levemente Seco (50% - 60%)';
         dom.badgeHum.className = 'badge status-warning';
       } else if (hum <= 80) {
         dom.badgeHum.textContent = 'Ideal (60% - 80%)';
@@ -1646,6 +1656,29 @@
     }
   }
 
+  // Handler para botão Voltar do Android (navegação SPA)
+  window.handleAndroidBackPress = function() {
+    // 1. Fechar qualquer modal aberto
+    const openModal = document.querySelector('.modal-backdrop:not(.hidden)');
+    if (openModal) {
+      openModal.classList.add('hidden');
+      // Fechar bottom sheet específico se estiver aberto
+      if (openModal.id === 'modalGreenhouseOptions') {
+        closeGreenhouseOptionsSheet();
+      }
+      return true;
+    }
+
+    // 2. Se estiver na visualização de detalhe, voltar para lista
+    if (dom.viewGreenhouseDetail && dom.viewGreenhouseDetail.classList.contains('active')) {
+      showView('list');
+      return true;
+    }
+
+    // 3. Não tratado - deixar o Android decidir (sair do app)
+    return false;
+  };
+
   function openGreenhouseDetail(greenhouseId) {
     const greenhouse = getGreenhouseById(greenhouseId);
     if (!greenhouse) return;
@@ -1737,14 +1770,20 @@
       readings = rawReadings;
     }
 
-    // Ajuste DPR para telas OLED/Retina
+    // Ajuste DPR para telas OLED/Retina - Responsivo baseado no container
     const dpr = window.devicePixelRatio || 1;
-    const displayWidth = 520;
+    const container = canvas.parentElement;
+    const containerWidth = container ? container.clientWidth : 520;
+    const displayWidth = Math.min(containerWidth - 2, 520); // -2 for border
     const displayHeight = 260;
     canvas.width = displayWidth * dpr;
     canvas.height = displayHeight * dpr;
     const ctx = canvas.getContext('2d');
     ctx.scale(dpr, dpr);
+
+    // Definir tamanho CSS do canvas para responsividade
+    canvas.style.width = displayWidth + 'px';
+    canvas.style.height = displayHeight + 'px';
 
     ctx.clearRect(0, 0, displayWidth, displayHeight);
 
@@ -2016,7 +2055,11 @@
       const mouseX = clientX - rect.left;
       const mouseY = clientY - rect.top;
 
-      const scaleX = 520 / rect.width;
+      // Usar displayWidth armazenado no state ou calcular dinamicamente
+      const container = canvas.parentElement;
+      const containerWidth = container ? container.clientWidth : 520;
+      const displayWidth = Math.min(containerWidth - 2, 520);
+      const scaleX = displayWidth / rect.width;
       const logicalX = mouseX * scaleX;
 
       // 1. Verifica se o toque está sobre uma lacuna offline
@@ -2083,8 +2126,14 @@
 
         tooltip.innerHTML = tooltipBody;
 
-        const ptScreenX = (closest.x / 520) * rect.width;
-        const ptScreenY = (closest.y / 260) * rect.height;
+        // Usar displayWidth/displayHeight dinâmicos
+        const container = canvas.parentElement;
+        const containerWidth = container ? container.clientWidth : 520;
+        const displayWidth = Math.min(containerWidth - 2, 520);
+        const displayHeight = 260;
+
+        const ptScreenX = (closest.x / displayWidth) * rect.width;
+        const ptScreenY = (closest.y / displayHeight) * rect.height;
 
         tooltip.style.left = `${ptScreenX}px`;
         tooltip.style.top = `${ptScreenY}px`;
