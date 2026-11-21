@@ -81,7 +81,12 @@ window.AndroidBluetooth = {
     if (window.onBluetoothStatusChanged) {
       window.onBluetoothStatusChanged('disconnected', 'User disconnected');
     }
-  }
+  },
+  triggerCriticalAlert: (name, id, type, msg) => {
+    console.log('[Mock] Push notification:', name, id, type, msg);
+  },
+  hasNotificationPermission: () => true,
+  requestNotificationPermission: () => {}
 };
 
 // Execute the app.js

@@ -146,7 +146,6 @@
     btnToggleConnection: document.getElementById('btnToggleConnection'),
     btnConnectionLabel: document.getElementById('btnConnectionLabel'),
     btnManualSync: document.getElementById('btnManualSync'),
-    btnToggleLCD: document.getElementById('btnToggleLCD'),
 
     // Banner de Sincronização Offline
     syncBanner: document.getElementById('syncBanner'),
@@ -860,6 +859,9 @@
         if (active) updateDetailViewUI(active.telemetria, true);
       }
       else if (status === 'disconnected') {
+        // Detecta se foi desconexão involuntária (não iniciada pelo usuário)
+        const isUserInitiated = details && details.includes('usuário');
+
         state.bluetooth.connected = false;
         state.bluetooth.isSyncing = false;
         if (active) active.online = false;
@@ -867,6 +869,12 @@
         updateBluetoothUI('disconnected');
         renderGreenhousesList();
         if (active) updateDetailViewUI(active.telemetria, false);
+
+        // Dispara alerta push nativo para desconexão involuntária
+        if (!isUserInitiated && active) {
+          addNotification(active.nome, 'Conexão Bluetooth perdida com a estufa! Dados sendo gravados offline.', 'warning');
+          triggerNativePush(active, 'bt_lost', 'Conexão Bluetooth perdida - Dados sendo gravados offline');
+        }
       }
       else if (status === 'connecting') {
         updateBluetoothUI('connecting');
@@ -1363,16 +1371,56 @@
   function checkIntelligentTriggers(greenhouse, data) {
     const soil = parseInt(data.umidade_solo, 10);
     const waterPct = parseInt(data.nivel_agua, 10);
+    const temp = parseFloat(data.temp);
     const isWaterLow = (waterPct <= 15 || data.status_agua === 'BAIXO');
+    const now = Date.now();
 
-    if (soil < 40 && data.bomba === 1 && (!greenhouse._lastAlertSolo || Date.now() - greenhouse._lastAlertSolo > 60000)) {
-      greenhouse._lastAlertSolo = Date.now();
+    // 1. Solo seco crítico (abaixo de 40%) com bomba ligando
+    if (soil < 40 && data.bomba === 1 && (!greenhouse._lastAlertSolo || now - greenhouse._lastAlertSolo > 60000)) {
+      greenhouse._lastAlertSolo = now;
       addNotification(greenhouse.nome, 'Solo seco detectado. Irrigação ligada automaticamente.', 'info');
+      triggerNativePush(greenhouse, 'soil_dry', `Umidade do solo crítica (${soil}%) - Irrigação ativada`);
     }
 
-    if (isWaterLow && (!greenhouse._lastAlertAgua || Date.now() - greenhouse._lastAlertAgua > 90000)) {
-      greenhouse._lastAlertAgua = Date.now();
+    // 2. Nível de água crítico (≤15%)
+    if (isWaterLow && (!greenhouse._lastAlertAgua || now - greenhouse._lastAlertAgua > 90000)) {
+      greenhouse._lastAlertAgua = now;
       addNotification(greenhouse.nome, 'Atenção: Nível de água crítico no reservatório!', 'warning');
+      triggerNativePush(greenhouse, 'water_low', `Nível de água crítico (${waterPct}%) - Bomba bloqueada por segurança`);
+    }
+
+    // 3. Temperatura excessiva (>30°C)
+    if (temp > 30 && (!greenhouse._lastAlertTemp || now - greenhouse._lastAlertTemp > 120000)) {
+      greenhouse._lastAlertTemp = now;
+      addNotification(greenhouse.nome, 'Temperatura excessiva na estufa! Ventilação necessária.', 'warning');
+      triggerNativePush(greenhouse, 'temp_high', `Temperatura excessiva (${temp.toFixed(1)}°C) - Ventilação necessária`);
+    }
+
+    // 4. Falha na bomba (tentativa de ligar mas bloqueada por falta d'água)
+    if (data.bomba === 0 && greenhouse._lastPumpAttempt && data.falta_agua === 1) {
+      if (!greenhouse._lastAlertPumpFail || now - greenhouse._lastAlertPumpFail > 90000) {
+        greenhouse._lastAlertPumpFail = now;
+        addNotification(greenhouse.nome, 'Falha ao acionar bomba: reservatório vazio!', 'danger');
+        triggerNativePush(greenhouse, 'pump_failed', 'Falha ao acionar bomba - Reservatório sem água');
+      }
+    }
+  }
+
+  /**
+   * Dispara notificação push nativa Android via bridge JavaScript
+   */
+  function triggerNativePush(greenhouse, alertType, message) {
+    if (window.AndroidBluetooth && window.AndroidBluetooth.triggerCriticalAlert) {
+      try {
+        window.AndroidBluetooth.triggerCriticalAlert(
+          greenhouse.nome,
+          greenhouse.id,
+          alertType,
+          message
+        );
+      } catch (e) {
+        console.warn('[AgroLink] Erro ao disparar push nativo:', e);
+      }
     }
   }
 
@@ -1404,6 +1452,11 @@
     if (state.pendingAck[atuador] && state.pendingAck[atuador].waiting) {
       showToast(`Aguardando confirmação da ${atuador === 'bomba' ? 'Bomba' : 'Ventoinha'}...`, 'info');
       return;
+    }
+
+    // Registra tentativa de bomba para detectar falhas posteriores
+    if (atuador === 'bomba' && novoEstado === 1) {
+      greenhouse._lastPumpAttempt = Date.now();
     }
 
     // Ativa estado intermediário piscando
@@ -2358,12 +2411,6 @@
     // Botão de Sincronização Manual de Dados Offline
     on(dom.btnManualSync, 'click', () => {
       BluetoothManager.requestOfflineSync();
-    });
-
-    // Botão de Alternar Tela do LCD
-    on(dom.btnToggleLCD, 'click', () => {
-      BluetoothManager.sendCommand('L');
-      showToast('Comando enviado: Alternar tela do LCD');
     });
 
     // Modal de Dispositivos Bluetooth

@@ -416,6 +416,7 @@ body {
   cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid var(--border-subtle);
+  position: relative; /* para posicionar notification-badge relativo ao botão */
 }
 
 .icon-btn:hover,

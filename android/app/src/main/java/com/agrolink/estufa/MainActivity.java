@@ -13,12 +13,22 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.app.Activity;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.content.Context;
+import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.Manifest;
 import android.graphics.Color;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
-import android.content.pm.PackageManager;
-import android.Manifest;
+import android.media.RingtoneManager;
+import android.net.Uri;
+import androidx.core.app.ActivityCompat;
+import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -53,6 +63,12 @@ public class MainActivity extends Activity {
     private static final UUID SPP_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
     private static final int PERMISSION_REQUEST_CODE = 101;
 
+    // Notificações Push Nativas
+    private static final String NOTIFICATION_CHANNEL_ID = "agrolink_alerts";
+    private static final String NOTIFICATION_CHANNEL_NAME = "Alertas AgroLink";
+    private static final int NOTIFICATION_ID_BASE = 1000;
+    private static final int NOTIFICATION_PERMISSION_REQUEST_CODE = 102;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -68,6 +84,8 @@ public class MainActivity extends Activity {
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         checkAndRequestPermissions();
+        createNotificationChannel();
+        checkAndRequestNotificationPermission();
 
         webView = new WebView(this);
         setContentView(webView);
@@ -132,19 +150,161 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode != PERMISSION_REQUEST_CODE) return;
 
-        boolean granted = true;
-        for (int r : grantResults) {
-            if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            boolean granted = true;
+            for (int r : grantResults) {
+                if (r != PackageManager.PERMISSION_GRANTED) { granted = false; break; }
+            }
+            permissionsGranted = granted;
+
+            if (granted) {
+                notifyStatusChange("permission_granted", "Permissões de Bluetooth concedidas.");
+            } else {
+                notifyStatusChange("permission_denied",
+                    "Permissões de Bluetooth negadas. Conceda em Configurações > Apps > AgroLink > Permissões.");
+            }
         }
-        permissionsGranted = granted;
+        else if (requestCode == NOTIFICATION_PERMISSION_REQUEST_CODE) {
+            // Android 13+ notificação permission result
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                notifyStatusChange("permission_granted", "Permissão de notificações concedida. Alertas push ativos.");
+            } else {
+                notifyStatusChange("permission_denied", "Permissão de notificações negada. Alertas push não funcionarão.");
+            }
+        }
+    }
 
-        if (granted) {
-            notifyStatusChange("permission_granted", "Permissões de Bluetooth concedidas.");
-        } else {
-            notifyStatusChange("permission_denied",
-                "Permissões de Bluetooth negadas. Conceda em Configurações > Apps > AgroLink > Permissões.");
+    // =========================================================================================
+    // NOTIFICAÇÕES PUSH NATIVAS (Android 8+)
+    // =========================================================================================
+
+    /**
+     * Cria o canal de notificação (obrigatório Android 8.0+ API 26+)
+     */
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                NOTIFICATION_CHANNEL_ID,
+                NOTIFICATION_CHANNEL_NAME,
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Notificações de alertas críticos da estufa (água, solo, temperatura)");
+            channel.enableVibration(true);
+            channel.setVibrationPattern(new long[]{0, 200, 100, 200});
+            channel.setSound(RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION), null);
+            channel.setLockscreenVisibility(android.app.Notification.VISIBILITY_PUBLIC);
+
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) {
+                manager.createNotificationChannel(channel);
+            }
+        }
+    }
+
+    /**
+     * Solicita permissão de notificação no Android 13+ (API 33+)
+     */
+    private void checkAndRequestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.POST_NOTIFICATIONS},
+                    NOTIFICATION_PERMISSION_REQUEST_CODE);
+            }
+        }
+    }
+
+    /**
+     * Mostra uma notificação push nativa estilo WhatsApp
+     * @param title Título da notificação (ex: "Alerta AgroLink - Estufa 1")
+     * @param message Mensagem descritiva (ex: "Umidade do solo crítica (0%) - Ação necessária")
+     * @param greenhouseId ID da estufa para deep link
+     * @param alertType Tipo de alerta: "water_low", "soil_dry", "temp_high", "pump_failed", "bt_lost"
+     */
+    public void showPushNotification(String title, String message, String greenhouseId, String alertType) {
+        // Cria intent para abrir o app na tela da estufa
+        Intent intent = new Intent(this, MainActivity.class);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        intent.putExtra("OPEN_GREENHOUSE_ID", greenhouseId);
+        intent.putExtra("ALERT_TYPE", alertType);
+
+        PendingIntent pendingIntent = PendingIntent.getActivity(
+            this,
+            NOTIFICATION_ID_BASE + alertType.hashCode(),
+            intent,
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M ? PendingIntent.FLAG_IMMUTABLE : 0
+        );
+
+        // Som e vibração padrão
+        Uri soundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_greenhouse_notification)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(new NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setAutoCancel(true)
+            .setSound(soundUri)
+            .setVibrate(new long[]{0, 200, 100, 200})
+            .setContentIntent(pendingIntent)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+        // Adiciona ação "Ver Estufa" se tiver ID
+        if (greenhouseId != null && !greenhouseId.isEmpty()) {
+            builder.addAction(
+                android.R.drawable.ic_menu_view,
+                "Ver Estufa",
+                pendingIntent
+            );
+        }
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            // Notificação ID único por tipo+estufa para permitir múltiplas
+            int notificationId = NOTIFICATION_ID_BASE + (greenhouseId != null ? greenhouseId.hashCode() : 0) + alertType.hashCode();
+            manager.notify(notificationId, builder.build());
+        }
+    }
+
+    /**
+     * Método chamado pelo JavaScript via BluetoothBridge para disparar alertas críticos
+     */
+    public void triggerCriticalAlert(String greenhouseName, String greenhouseId, String alertType, String message) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                // Sem permissão, não consegue mostrar notificação
+                return;
+            }
+        }
+
+        String title = "Alerta AgroLink - " + (greenhouseName != null ? greenhouseName : "Estufa");
+        String alertMessage = message != null ? message : getDefaultAlertMessage(alertType);
+
+        showPushNotification(title, alertMessage, greenhouseId, alertType);
+    }
+
+    /**
+     * Mensagens padrão por tipo de alerta
+     */
+    private String getDefaultAlertMessage(String alertType) {
+        switch (alertType) {
+            case "water_low":
+                return "Nível de água crítico no reservatório! Bomba bloqueada por segurança.";
+            case "soil_dry":
+                return "Umidade do solo muito baixa! Estufa seca - irrigação necessária.";
+            case "temp_high":
+                return "Temperatura excessiva na estufa! Ventilação necessária.";
+            case "pump_failed":
+                return "Falha ao acionar a bomba de água! Verifique a conexão e reservatório.";
+            case "bt_lost":
+                return "Conexão Bluetooth perdida com a estufa! Dados sendo gravados offline.";
+            default:
+                return "Alerta crítico detectado na estufa.";
         }
     }
 
@@ -280,6 +440,37 @@ public class MainActivity extends Activity {
                 e.printStackTrace();
                 onConnectionLost("Erro de transmissão serial.");
                 return false;
+            }
+        }
+
+        /**
+         * Dispara notificação push nativa para alerta crítico na estufa
+         * Chamado pelo JavaScript quando detecta: água crítica, solo seco, temp alta, falha bomba, BT perdido
+         */
+        @JavascriptInterface
+        public void triggerCriticalAlert(String greenhouseName, String greenhouseId, String alertType, String message) {
+            MainActivity.this.triggerCriticalAlert(greenhouseName, greenhouseId, alertType, message);
+        }
+
+        /**
+         * Verifica se o app tem permissão para mostrar notificações (Android 13+)
+         */
+        @JavascriptInterface
+        public boolean hasNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                return ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.POST_NOTIFICATIONS)
+                        == PackageManager.PERMISSION_GRANTED;
+            }
+            return true; // Android < 13 não precisa de permissão especial
+        }
+
+        /**
+         * Solicita permissão de notificação ao usuário (Android 13+)
+         */
+        @JavascriptInterface
+        public void requestNotificationPermission() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                checkAndRequestNotificationPermission();
             }
         }
     }

@@ -12,6 +12,9 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
 
+    <!-- Notificações Push Nativas (Android 13+ API 33+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Recursos de Sistema -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.VIBRATE" />
