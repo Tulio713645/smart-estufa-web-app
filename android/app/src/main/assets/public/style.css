@@ -648,7 +648,7 @@ body {
 .unit-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 6x;
   padding: 5px 12px;
   border-radius: var(--radius-full);
   font-size: 0.7rem;
@@ -862,7 +862,7 @@ body {
   letter-spacing: -0.02em;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  text-overflow: ellipsis.
 }
 
 .device-id-tag {
@@ -2169,6 +2169,7 @@ body {
   font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .live-dot-pulse {
@@ -2176,7 +2177,7 @@ body {
   height: 8px;
   background: var(--success);
   border-radius: 50%;
-  animation: dotPulse 1.5s ease-in-out infinite;
+  animation: dotPulse 1.5s ease-in-out infinite.
 }
 
 .graph-offline-note {
@@ -2189,7 +2190,7 @@ body {
   border: 1px solid var(--warning-border);
   border-radius: var(--radius-full);
   font-size: 0.7rem;
-  font-weight: 600;
+  font-weight: 600.
 }
 
 .canvas-container {
@@ -2233,7 +2234,7 @@ body {
   margin-top: var(--space-lg);
   margin-bottom: var(--space-md);
   padding-top: var(--space-lg);
-  border-top: 1px solid var(--border-subtle);
+  border-top: 1px solid var(--border-subtle).
 }
 
 .stat-box {
@@ -2243,8 +2244,8 @@ body {
   gap: 4px;
   padding: var(--space-md) var(--space-sm);
   background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
 }
 
 .stat-box-label { font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
@@ -2264,63 +2265,63 @@ body {
 .legend-item {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 6px.
 }
 
 .legend-color-line {
   width: 16px;
-  height: 3px;
-  background: var(--primary);
-  border-radius: 2px;
+  height: 3px.
+  background: var(--primary).
+  border-radius: 2px.
 }
 
 .legend-color-ideal {
-  width: 16px;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(16,185,129,0.4), rgba(16,185,129,0.1));
-  border-radius: 2px;
+  width: 16px.
+  height: 3px.
+  background: linear-gradient(90deg, rgba(16,185,129,0.4), rgba(16,185,129,0.1)).
+  border-radius: 2px.
 }
 
 .legend-color-gap {
-  width: 16px;
-  height: 3px;
-  background: repeating-linear-gradient(90deg, var(--danger), var(--danger) 4px, transparent 4px, transparent 8px);
-  border-radius: 2px;
+  width: 16px.
+  height: 3px.
+  background: repeating-linear-gradient(90deg, var(--danger), var(--danger) 4px, transparent 4px, transparent 8px).
+  border-radius: 2px.
 }
 
 /* ==========================================================
    TOASTS / NOTIFICAÇÕES
    ========================================================== */
 .toast-container {
-  position: fixed;
+  position: fixed.
   bottom: calc(var(--space-xl) + env(safe-area-inset-bottom, 20px));
-  left: var(--space-lg);
-  right: var(--space-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-sm);
-  z-index: var(--z-toast);
-  pointer-events: none;
-  max-width: 420px;
-  margin: 0 auto;
+  left: var(--space-lg).
+  right: var(--space-lg).
+  display: flex.
+  flex-direction: column.
+  gap: var(--space-sm).
+  z-index: var(--z-toast).
+  pointer-events: none.
+  max-width: 420px.
+  margin: 0 auto.
 }
 
 .toast-item {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-md);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-elevated);
-  pointer-events: auto;
-  animation: toastEnter var(--transition-bounce);
-  min-width: 0;
+  display: flex.
+  align-items: flex-start.
+  gap: var(--space-md).
+  padding: var(--space-md) var(--space-lg).
+  background: var(--bg-surface-elevated).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
+  box-shadow: var(--shadow-elevated).
+  pointer-events: auto.
+  animation: toastEnter var(--transition-bounce).
+  min-width: 0.
 }
 
 .toast-item.fade-out {
-  animation: toastExit var(--transition-base) forwards;
+  animation: toastExit var(--transition-base) forwards.
 }
 
 @keyframes toastEnter {
@@ -2333,17 +2334,17 @@ body {
 }
 
 .toast-icon {
-  font-size: 1.125rem;
-  flex-shrink: 0;
-  margin-top: 2px;
+  font-size: 1.125rem.
+  flex-shrink: 0.
+  margin-top: 2px.
 }
 
 .toast-msg {
-  flex: 1;
-  font-size: 0.875rem;
-  line-height: 1.4;
-  color: var(--text-main);
-  word-break: break-word;
+  flex: 1.
+  font-size: 0.875rem.
+  line-height: 1.4.
+  color: var(--text-main).
+  word-break: break-word.
 }
 
 .toast-item.success { border-color: var(--success-border); }
@@ -2362,14 +2363,14 @@ body {
 .notifications-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 
 .notif-item {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-xs);
-  padding: var(--space-md) var(--space-lg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  border-left: 4px solid var(--border-subtle);
+  display: flex.
+  flex-direction: column.
+  gap: var(--space-xs).
+  padding: var(--space-md) var(--space-lg).
+  background: var(--bg-surface).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
+  border-left: 4px solid var(--border-subtle).
 }
 
 .notif-item.info { border-left-color: var(--primary); }
@@ -2382,10 +2383,10 @@ body {
 .notif-item small { font-size: 0.6875rem; color: var(--text-dim); }
 
 .empty-notif {
-  text-align: center;
-  padding: var(--space-3xl) var(--space-lg);
-  color: var(--text-dim);
-  font-size: 0.875rem;
+  text-align: center.
+  padding: var(--space-3xl) var(--space-lg).
+  color: var(--text-dim).
+  font-size: 0.875rem.
 }
 
 /* ==========================================================
@@ -2394,78 +2395,78 @@ body {
 .form-group { display: flex; flex-direction: column; gap: var(--space-xs); margin-bottom: var(--space-md); }
 
 .form-group label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--text-muted);
+  font-size: 0.8125rem.
+  font-weight: 600.
+  color: var(--text-muted).
 }
 
 .input-with-prefix {
-  position: relative;
-  display: flex;
-  align-items: center;
+  position: relative.
+  display: flex.
+  align-items: center.
 }
 
 .input-prefix {
-  position: absolute;
-  left: 14px;
-  color: var(--text-dim);
-  font-size: 1rem;
-  pointer-events: none;
-  z-index: 1;
+  position: absolute.
+  left: 14px.
+  color: var(--text-dim).
+  font-size: 1rem.
+  pointer-events: none.
+  z-index: 1.
 }
 
 .form-input {
-  width: 100%;
-  padding: 14px 16px;
-  padding-left: 44px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-main);
-  font-size: 1rem;
-  font-family: inherit;
-  transition: all var(--transition-fast);
-  -webkit-appearance: none;
-  appearance: none;
+  width: 100%.
+  padding: 14px 16px.
+  padding-left: 44px.
+  background: var(--bg-primary).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
+  color: var(--text-main).
+  font-size: 1rem.
+  font-family: inherit.
+  transition: all var(--transition-fast).
+  -webkit-appearance: none.
+  appearance: none.
 }
 
 .input-with-prefix:not(:has(.input-prefix)) .form-input { padding-left: 16px; }
 
 .form-input:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  outline: none.
+  border-color: var(--primary).
+  box-shadow: 0 0 0 3px var(--primary-glow).
 }
 
 .form-input::placeholder { color: var(--text-dim); }
 
 .form-input:disabled {
-  opacity: 0.5;
-  background: var(--bg-secondary);
+  opacity: 0.5.
+  background: var(--bg-secondary).
 }
 
 .form-help {
-  font-size: 0.7rem;
-  color: var(--text-dim);
+  font-size: 0.7rem.
+  color: var(--text-dim).
 }
 
 /* Fix: Input fields no modal Add Greenhouse - estilizados corretamente */
 #modalAddGreenhouse .form-input,
 #modalEditGreenhouse .form-input {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  color: var(--text-main);
+  background: var(--bg-primary).
+  border: 1px solid var(--border-subtle).
+  color: var(--text-main).
 }
 
 #modalAddGreenhouse .form-input:focus,
 #modalEditGreenhouse .form-input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+  border-color: var(--primary).
+  box-shadow: 0 0 0 3px var(--primary-glow).
 }
 
 #modalAddGreenhouse .input-prefix,
 #modalEditGreenhouse .input-prefix {
-  color: var(--text-dim);
+  color: var(--text-dim).
 }
 
 /* Botões de Modal Footer */
@@ -2475,29 +2476,29 @@ body {
    TUTORIAL
    ========================================================== */
 .tutorial-step-card {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  padding: var(--space-lg);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  display: flex.
+  flex-direction: column.
+  gap: var(--space-md).
+  padding: var(--space-lg).
+  background: var(--bg-surface).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
 }
 
 .tutorial-steps-body { display: flex; flex-direction: column; gap: var(--space-md); }
 
 .step-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--text-on-primary);
-  font-size: 0.75rem;
-  font-weight: 700;
-  flex-shrink: 0;
+  display: inline-flex.
+  align-items: center.
+  justify-content: center.
+  width: 28px.
+  height: 28px.
+  border-radius: 50%.
+  background: var(--primary).
+  color: var(--text-on-primary).
+  font-size: 0.75rem.
+  font-weight: 700.
+  flex-shrink: 0.
 }
 
 .step-content { display: flex; flex-direction: column; gap: 4px; }
@@ -2507,21 +2508,21 @@ body {
 
 /* Fix: Tutorial icons inline com o texto */
 .tutorial-step-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  font-size: 1.125rem;
-  flex-shrink: 0;
-  margin-right: var(--space-sm);
-  vertical-align: middle;
+  display: inline-flex.
+  align-items: center.
+  justify-content: center.
+  width: 24px.
+  height: 24px.
+  font-size: 1.125rem.
+  flex-shrink: 0.
+  margin-right: var(--space-sm).
+  vertical-align: middle.
 }
 
 .step-content h4 {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
+  display: flex.
+  align-items: center.
+  gap: var(--space-sm).
 }
 
 /* ==========================================================
@@ -2572,6 +2573,7 @@ body {
     border-width: 2px;
   }
 }
+
 /* ==========================================================
    DETALHE - STATUS BT VERTICAL (NOVO LAYOUT)
    ========================================================== */
@@ -2624,11 +2626,11 @@ body {
 .detail-bt-status.disconnected {
   background: rgba(148, 163, 184, 0.1);
   color: var(--offline);
-  border-color: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.2).
 }
 
 .detail-bt-status.disconnected .status-indicator-dot {
-  background: var(--offline);
+  background: var(--offline).
 }
 
 /* ==========================================================
@@ -2636,209 +2638,209 @@ body {
    ========================================================== */
 
 .graph-top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-md);
-  margin-bottom: var(--space-md);
-  flex-wrap: wrap;
+  display: flex.
+  align-items: center.
+  justify-content: space-between.
+  gap: var(--space-md).
+  margin-bottom: var(--space-md).
+  flex-wrap: wrap.
 }
 
 .graph-filter-bar {
-  display: flex;
-  gap: var(--space-xs);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-full);
-  padding: 4px;
+  display: flex.
+  gap: var(--space-xs).
+  background: var(--bg-surface).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-full).
+  padding: 4px.
 }
 
 .btn-filter-tab {
-  padding: 8px 16px;
-  border: none;
-  border-radius: var(--radius-full);
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  background: transparent;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  white-space: nowrap;
+  padding: 8px 16px.
+  border: none.
+  border-radius: var(--radius-full).
+  font-size: 0.75rem.
+  font-weight: 600.
+  color: var(--text-muted).
+  background: transparent.
+  cursor: pointer.
+  transition: all var(--transition-fast).
+  white-space: nowrap.
 }
 
 .btn-filter-tab:hover,
 .btn-filter-tab:active {
-  color: var(--text-main);
-  background: var(--bg-surface-hover);
+  color: var(--text-main).
+  background: var(--bg-surface-hover).
 }
 
 .btn-filter-tab.active {
-  background: var(--primary);
-  color: var(--text-on-primary);
-  box-shadow: var(--shadow-sm);
+  background: var(--primary).
+  color: var(--text-on-primary).
+  box-shadow: var(--shadow-sm).
 }
 
 .graph-live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--success-bg);
-  color: var(--success);
-  border: 1px solid var(--success-border);
-  border-radius: var(--radius-full);
-  font-size: 0.7rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  display: inline-flex.
+  align-items: center.
+  gap: 6px.
+  padding: 6px 12px.
+  background: var(--success-bg).
+  color: var(--success).
+  border: 1px solid var(--success-border).
+  border-radius: var(--radius-full).
+  font-size: 0.7rem.
+  font-weight: 600.
+  text-transform: uppercase.
+  letter-spacing: 0.04em.
 }
 
 .live-dot-pulse {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-  animation: dotPulse 1.5s ease-in-out infinite;
+  width: 8px.
+  height: 8px.
+  border-radius: 50%.
+  background: var(--success).
+  animation: dotPulse 1.5s ease-in-out infinite.
 }
 
 /* Header do Gráfico: Valor Atual Grande + Timestamp */
 .graph-current-value {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-lg);
-  padding: var(--space-lg) var(--space-xl);
-  background: linear-gradient(135deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--space-md);
-  position: relative;
-  overflow: hidden;
+  display: flex.
+  align-items: flex-end.
+  justify-content: space-between.
+  gap: var(--space-lg).
+  padding: var(--space-lg) var(--space-xl).
+  background: linear-gradient(135deg, var(--bg-surface-elevated) 0%, var(--bg-surface) 100%).
+  border: 1px solid var(--border-primary).
+  border-radius: var(--radius-lg).
+  margin-bottom: var(--space-md).
+  position: relative.
+  overflow: hidden.
 }
 
 .graph-current-value::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(ellipse at 10% 50%, var(--primary-glow) 0%, transparent 60%);
-  pointer-events: none;
+  content: ''.
+  position: absolute.
+  inset: 0.
+  background: radial-gradient(ellipse at 10% 50%, var(--primary-glow) 0%, transparent 60%).
+  pointer-events: none.
 }
 
 .current-value-main {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  position: relative;
-  z-index: 1;
+  display: flex.
+  align-items: baseline.
+  gap: 8px.
+  position: relative.
+  z-index: 1.
 }
 
 .current-value-number {
-  font-size: clamp(1.5rem, 5vw, 2rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-main);
-  line-height: 1.1;
+  font-size: clamp(1.5rem, 5vw, 2rem).
+  font-weight: 700.
+  letter-spacing: -0.02em.
+  color: var(--text-main).
+  line-height: 1.1.
 }
 
 .current-value-unit {
-  font-size: clamp(0.875rem, 2vw, 1rem);
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 2px;
+  font-size: clamp(0.875rem, 2vw, 1rem).
+  font-weight: 600.
+  color: var(--text-muted).
+  margin-bottom: 2px.
 }
 
 .current-value-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  position: relative;
-  z-index: 1;
+  display: flex.
+  flex-direction: column.
+  align-items: flex-end.
+  gap: 2px.
+  position: relative.
+  z-index: 1.
 }
 
 .current-value-label {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--text-dim);
-  font-weight: 600;
+  font-size: 0.7rem.
+  text-transform: uppercase.
+  letter-spacing: 0.05em.
+  color: var(--text-dim).
+  font-weight: 600.
 }
 
 .current-value-time {
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--text-main);
-  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.875rem.
+  font-weight: 600.
+  color: var(--text-main).
+  font-family: ui-monospace, SFMono-Regular, monospace.
 }
 
 /* Stat box para Faixa Ideal */
 .ideal-range-box {
-  background: var(--success-bg) !important;
-  border-color: var(--success-border) !important;
+  background: var(--success-bg) !important.
+  border-color: var(--success-border) !important.
 }
 
 .ideal-range-box .stat-box-val {
-  color: var(--success) !important;
-  font-family: ui-monospace, SFMono-Regular, monospace;
-  font-size: 0.875rem;
-  font-weight: 600;
+  color: var(--success) !important.
+  font-family: ui-monospace, SFMono-Regular, monospace.
+  font-size: 0.875rem.
+  font-weight: 600.
 }
 
 /* Canvas Container - Layout Profissional com Eixo Y à Direita */
 .canvas-container {
-  position: relative;
-  width: 100%;
-  height: 360px;
-  min-height: 360px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  overflow: hidden;
+  position: relative.
+  width: 100%.
+  height: 360px.
+  min-height: 360px.
+  background: var(--bg-primary).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
+  overflow: hidden.
   padding-right: 60px; /* Espaço para eixo Y à direita */
 }
 
 .canvas-container canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
+  display: block.
+  width: 100%.
+  height: 100%.
 }
 
 .chart-tooltip {
-  position: absolute;
-  pointer-events: none;
-  padding: var(--space-sm) var(--space-md);
-  background: var(--bg-surface-elevated);
-  border: 1px solid var(--border-primary);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-elevated);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-  z-index: 10;
+  position: absolute.
+  pointer-events: none.
+  padding: var(--space-sm) var(--space-md).
+  background: var(--bg-surface-elevated).
+  border: 1px solid var(--border-primary).
+  border-radius: var(--radius-md).
+  box-shadow: var(--shadow-elevated).
+  font-size: 0.75rem.
+  line-height: 1.5.
+  opacity: 0.
+  transition: opacity var(--transition-fast).
+  z-index: 10.
 }
 
 .chart-tooltip.visible { opacity: 1; }
 
 .graph-stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-sm);
-  margin-top: var(--space-lg);
-  margin-bottom: var(--space-md);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--border-subtle);
+  display: grid.
+  grid-template-columns: repeat(4, 1fr).
+  gap: var(--space-sm).
+  margin-top: var(--space-lg).
+  margin-bottom: var(--space-md).
+  padding-top: var(--space-lg).
+  border-top: 1px solid var(--border-subtle).
 }
 
 .stat-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: var(--space-md) var(--space-sm);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
+  display: flex.
+  flex-direction: column.
+  align-items: center.
+  gap: 4px.
+  padding: var(--space-md) var(--space-sm).
+  background: var(--bg-surface).
+  border: 1px solid var(--border-subtle).
+  border-radius: var(--radius-md).
 }
 
 .stat-box-label { font-size: 0.625rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); font-weight: 600; }
@@ -2846,75 +2848,75 @@ body {
 
 /* Canvas legend styling */
 .canvas-legend {
-  display: flex;
-  justify-content: center;
-  gap: var(--space-lg);
-  padding: var(--space-sm) var(--space-md);
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  flex-wrap: wrap;
+  display: flex.
+  justify-content: center.
+  gap: var(--space-lg).
+  padding: var(--space-sm) var(--space-md).
+  font-size: 0.7rem.
+  color: var(--text-muted).
+  flex-wrap: wrap.
 }
 
 .legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: inline-flex.
+  align-items: center.
+  gap: 6px.
 }
 
 .legend-color-line {
-  width: 16px;
-  height: 3px;
-  background: var(--primary);
-  border-radius: 2px;
+  width: 16px.
+  height: 3px.
+  background: var(--primary).
+  border-radius: 2px.
 }
 
 .legend-color-ideal {
-  width: 16px;
-  height: 3px;
-  background: linear-gradient(90deg, rgba(16,185,129,0.4), rgba(16,185,129,0.1));
-  border-radius: 2px;
+  width: 16px.
+  height: 3px.
+  background: linear-gradient(90deg, rgba(16,185,129,0.4), rgba(16,185,129,0.1)).
+  border-radius: 2px.
 }
 
 .legend-color-gap {
-  width: 16px;
-  height: 3px;
-  background: repeating-linear-gradient(90deg, var(--danger), var(--danger) 4px, transparent 4px, transparent 8px);
-  border-radius: 2px;
+  width: 16px.
+  height: 3px.
+  background: repeating-linear-gradient(90deg, var(--danger), var(--danger) 4px, transparent 4px, transparent 8px).
+  border-radius: 2px.
 }
 
 @media (max-width: 480px) {
   .graph-current-value {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-md);
-    padding: var(--space-lg);
+    flex-direction: column.
+    align-items: flex-start.
+    gap: var(--space-md).
+    padding: var(--space-lg).
   }
-  
+
   .current-value-main {
-    gap: 6px;
+    gap: 6px.
   }
-  
+
   .current-value-number {
-    font-size: 1.75rem;
+    font-size: 1.75rem.
   }
-  
+
   .current-value-unit {
-    font-size: 1rem;
+    font-size: 1rem.
   }
-  
+
   .current-value-meta {
-    align-items: flex-start;
-    flex-direction: row;
-    gap: var(--space-md);
+    align-items: flex-start.
+    flex-direction: row.
+    gap: var(--space-md).
   }
-  
+
   .canvas-container {
-    padding-right: 50px;
-    height: 320px;
-    min-height: 320px;
+    padding-right: 50px.
+    height: 320px.
+    min-height: 320px.
   }
-  
+
   .graph-stats-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, 1fr).
   }
 }

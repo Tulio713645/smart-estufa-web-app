@@ -242,10 +242,21 @@ public class MainActivity extends Activity {
 
         @JavascriptInterface
         public void reconnect() {
+            // Garante limpeza total antes de reconectar
+            autoReconnect = false;
+            reconnectHandler.removeCallbacksAndMessages(null);
+            closeConnection();
+
             if (lastMacAddress != null) {
                 autoReconnect = true;
                 reconnectAttempts = 0;
-                startConnect(lastMacAddress);
+                // Pequeno delay para garantir que socket anterior foi fechado
+                reconnectHandler.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        startConnect(lastMacAddress);
+                    }
+                }, 500);
             } else {
                 notifyStatusChange("error", "Nenhum dispositivo para reconectar.");
             }
@@ -278,6 +289,7 @@ public class MainActivity extends Activity {
         isConnecting = false;
         if (connectThread != null && connectThread.isAlive()) {
             connectThread.interrupt();
+            try { connectThread.join(1000); } catch (InterruptedException ignored) {}
         }
         closeConnection();
 

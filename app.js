@@ -146,6 +146,7 @@
     btnToggleConnection: document.getElementById('btnToggleConnection'),
     btnConnectionLabel: document.getElementById('btnConnectionLabel'),
     btnManualSync: document.getElementById('btnManualSync'),
+    btnToggleLCD: document.getElementById('btnToggleLCD'),
 
     // Banner de Sincronização Offline
     syncBanner: document.getElementById('syncBanner'),
@@ -2357,6 +2358,12 @@
     // Botão de Sincronização Manual de Dados Offline
     on(dom.btnManualSync, 'click', () => {
       BluetoothManager.requestOfflineSync();
+    });
+
+    // Botão de Alternar Tela do LCD
+    on(dom.btnToggleLCD, 'click', () => {
+      BluetoothManager.sendCommand('L');
+      showToast('Comando enviado: Alternar tela do LCD');
     });
 
     // Modal de Dispositivos Bluetooth

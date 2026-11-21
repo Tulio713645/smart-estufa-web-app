@@ -1,0 +1,31 @@
+# Execute estes comandos no terminal (PowerShell ou CMD) na pasta do projeto:
+
+cd "C:\Users\tulio\Documents\Tulio\Interface Estufa"
+
+# Remover locks se existirem
+rm -f .git/HEAD.lock .git/index.lock
+
+# Verificar status
+git status
+
+# Adicionar arquivos modificados
+git add index.html app.js style.css android/app/src/main/assets/public/index.html android/app/src/main/assets/public/app.js android/app/src/main/assets/public/style.css
+
+# Commit com mensagem descritiva
+git commit -m "fix(ui): generic greenhouse icon, graph breathing room, BT indicator in subtitle-row
+
+- Ícone genérico de estufa (SVG inline) substituindo ícones de legumes
+- Card lista e detail view usam o mesmo ícone de estufa com fundo var(--primary)
+- Graph canvas-container: 360px height, padding chart: top:35 right:25 bottom:45 left:55
+- Chart displayHeight usa containerHeight até 340px
+- BT indicator movido para header-subtitle-row com margin-left: auto (à direita do texto)
+- Helpers unificados getSoilStatus/getTempStatus/getHumStatus para card + detail + gráfico
+- Card mostra badge: '72% • Ideal (60% - 80%)', '24°C • Ideal (20°C - 30°C)'
+- Detail view e gráfico usam mesmos helpers → classificação idêntica
+- Gráfico desenha label 'Ideal (X-Y unit)' na faixa sombreada
+- Long press user-select:none, 3-dots z-index:10 touch-action:manipulation
+- Labels eixos X: 'Início/4h/8h/12h/16h/20h/Agora' (dia) e 'Dia 1/Dia 7/Dia 14/Dia 21/Dia 28/Hoje' (mês)
+- Faixas ideais: solo 60-80%, temp 20-30°C, ar 60-80%"
+
+# Push para o GitHub (precisa de token com escopo repo Contents: Read/Write)
+git push origin main
